@@ -282,6 +282,7 @@ phylo.otut <- list()
 
 for (x in f) {
   otumap <- read.table(paste0("../inst/extdata/", x,"_MATRIX-COUNT.txt"),  header = T,row.names = 1) %>% t
+  colnames(otumap) <- stringr::str_replace_all(colnames(otumap), 'R|c','')
   otumap <- otumap[,rownames(sample_data(NYC_HANES))]
   taxmat <- matrix(sample(letters, 7*nrow(otumap), replace = TRUE), nrow = nrow(otumap), ncol = 7)
   rownames(taxmat) <- rownames(otumap)
@@ -447,13 +448,13 @@ tfooter
 
 permanova_var_names <- c("AGEGRP5C","GENDER","EDU4CAT","INC3C","DMQ_2","RACE","US_BORN","smokingstatus")
 
-df_permanova <- na.omit(metadata[, c("SampleID", permanova_var_names)])
+df_permanova <- na.omit(metadata[, c("Burklab_ID", permanova_var_names)])
 # #creating an NA factor level for INC3C because permanova doesn't allow NAs
 # df_permanova$INC3C %<>% as.character
 # df_permanova$INC3C[is.na(df_permanova$INC3C)] <- "NA"
 
 dist_perm <- phyloseq::distance(
-  subset_samples(NYC_HANES, sample_names(NYC_HANES) %in% df_permanova$SampleID ), 
+  subset_samples(NYC_HANES, sample_names(NYC_HANES) %in% df_permanova$Burklab_ID ), 
   method="wunifrac")
 
 list_permanovas <- list(
@@ -487,7 +488,7 @@ knitr::kable( perm_results)
 ```{r compare_beta_diversity, cache=TRUE, fig.width=5, fig.height=5, fig.cap="Within and between group beta diversity estimate distributions."}
 
 pb <- plot_beta_by(
-  pseq=subset_samples(NYC_HANES, sample_names(NYC_HANES) %in% df_permanova$SampleID), 
+  pseq=subset_samples(NYC_HANES, sample_names(NYC_HANES) %in% df_permanova$Burklab_ID), 
   vars = permanova_var_names, 
   dist_mtrx = dist_perm)
 
@@ -583,19 +584,19 @@ df_strongest <- df_tile  %>% arrange(variable, desc(abs(logFC))) %>%
   group_by(variable) %>% 
   filter(!duplicated(Genus))%>%  
   top_n(5, wt=logFC)  %>% 
-  select(variable, varlevel, Genus, logFC, FDR) 
+  dplyr::select(variable, varlevel, Genus, logFC, FDR) 
 
 
 
 df_important_genera <- df_tile %>% 
   #filter(Genus %in% c("Fusobacterium","Porphyromonas","Pseudomonas","Prevotella","Lactobacillus","Lactococcus")) %>%
-  group_by(variable) %>% arrange(variable, desc(abs(logFC))) %>% filter(!duplicated(Genus)) %>% select(variable, varlevel, Genus, logFC, FDR)
+  group_by(variable) %>% arrange(variable, desc(abs(logFC))) %>% filter(!duplicated(Genus)) %>% dplyr::select(variable, varlevel, Genus, logFC, FDR)
 options(scipen = 999)
 df_important_genera$FDR %<>% format.pval(eps = .0001, digits=1)
 df_important_genera$logFC %<>% round(1)
 df_important_genera %<>% mutate(abundance=ifelse(logFC>0, "greater","less") %>% factor(levels=c("greater","less")))
 df_important_genera$result <- paste0(df_important_genera$Genus, " (logFC ", df_important_genera$logFC, ", FDR ", df_important_genera$FDR, ")")
-df_important_genera %<>% select(-FDR,-Genus) %>% arrange(variable, abundance)
+df_important_genera %<>% dplyr::select(-FDR,-Genus) %>% arrange(variable, abundance)
 df_important_genera %<>% ungroup
 
 
