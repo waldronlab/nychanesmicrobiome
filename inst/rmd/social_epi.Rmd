@@ -1,0 +1,1215 @@
+---
+title: "NYC-HANES2 Social Epidemiology of the Oral Microbiome"
+author: "Audrey Renson"
+date: "`r format(Sys.Date(), '%b %d, %Y')  `"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE,  message=FALSE)
+library(phyloseq)
+library(tableone)
+library(mosaic)
+library(ape)
+library(vegan)
+library(fpc)
+library(cluster)
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(gtable)
+library(grid)
+library(dendextend)
+library(circlize)
+library(knitr)
+library(htmlTable)
+library(clinRes)
+library(kableExtra)
+library(gridExtra)
+
+
+source("utils.R")
+source("summaryPlots.R")
+source("edgeR_functions.R")
+```
+
+
+```{r load_pilot_data}
+
+suppressPackageStartupMessages({
+  NYC_HANES_raw <- loadQiimeData()
+  NYC_HANES <- annotateFactors(NYC_HANES_raw)
+})
+
+metadata <- data.frame(sample_data(NYC_HANES))
+
+```
+
+```{r load_full_dataset, cache=TRUE}
+library(sas7bdat)
+nychanes_sas <- read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYCHANES_2013_14_V2_09212016.sas7bdat")
+
+nychanes_full <- annotateFullDataset(nychanes_sas)
+
+a<- "A"
+```
+
+
+# Descriptives
+
+## Table 1: Demographics & Descriptive Statistics
+
+```{r table1, results='asis', echo=FALSE}
+
+variablesToLook <- c("SPAGE", "AGEGRP5C", "GENDER","EDU4CAT","INC3C","DMQ_2","RACE","US_BORN",
+                     "DMQ_7YEAR","A1C","GLUCOSE", "AGEGRP3C", "EDU3CAT",
+                     "OHQ_3", "OHQ_5_3CAT","DBQ_10_3CAT")
+
+
+
+table1_data <- rbind(transform(formatMetadata(NYC_HANES), dataset="Oral Microbiome Subsample"),
+                     transform(formatMetadata(nychanes_full), dataset="Full NYC HANES Sample"))
+names(table1_data) <- c(names(formatMetadata(NYC_HANES)), "dataset")
+
+
+table1 <- CreateTableOne(vars=names(table1_data)[-which(names(table1_data)=="dataset")], strata="dataset",data=table1_data, includeNA = TRUE, test=FALSE)
+
+table1 <- print(table1, smd=TRUE, printToggle=FALSE)
+
+
+rownames(table1) <- rownames(prettytable_autoindent(vars = names(table1_data)[-which(names(table1_data)=="dataset")],data = table1_data, 
+                         includeNA = TRUE))
+
+
+rownames(table1)[1] <- "Total"
+rownames(table1) <- gsub("NA", "<i>Missing</i>", rownames(table1))
+rownames(table1)[2] <- "Age in years -- median [range]"
+table1[2,1:2 ] <- c(paste0(median(table1_data$`Age (yrs)`[table1_data$dataset=="Oral Microbiome Subsample"]), " [", min(table1_data$`Age (yrs)`[table1_data$dataset=="Oral Microbiome Subsample"]),
+                      " to ", max(table1_data$`Age (yrs)`[table1_data$dataset=="Oral Microbiome Subsample"]), "]"),
+                 paste0(median(table1_data$`Age (yrs)`[table1_data$dataset=="Full NYC HANES Sample"],na.rm=TRUE), " [", 
+                        min(table1_data$`Age (yrs)`[table1_data$dataset=="Full NYC HANES Sample"],na.rm=TRUE),
+                      " to ", max(table1_data$`Age (yrs)`[table1_data$dataset=="Full NYC HANES Sample"],na.rm=TRUE), "]"))
+
+
+knitr::kable(table1, format="markdown", caption="Table 1. Sample demographics and oral health behavioral characteristics.")
+
+
+
+prc <- function(x, g) {
+  z<-round(prop.table(table(table1_data[,x]))[g] * 100, 1); names(z)=NULL; return(z)
+}
+
+t1tx <- c(nhw= prc("Race/ethnicity", "Non-Hispanic White") , 
+               "nhb"=prc("Race/ethnicity", "Non-Hispanic Black"),
+               "fem"=prc("Gender","Female"), 
+               "lt30"=prc("Annual family income","Less Than $30,000"), 
+               "gt60"=prc("Annual family income","$60,000 or more"), 
+               "hsd"=prc("Educational achievement","Less than High school diploma"), 
+               "cd"=prc("Educational achievement","College graduate or more"),
+               "us"=prc("Place of birth","US, PR and Territories"))
+
+
+```
+
+```{r table1_as_figure, fig.width=5.5, fig.height=4}
+list_bars <- lapply(c("AGEGRP3C","EDU4CAT","INC3C","RACE","GENDER"),
+       function(i) prop.table(table(metadata[[i]]))*100)
+
+df_bar <- data.frame(value=unlist(list_bars), 
+           variable=rep(c("Age group","Education","Family\nIncome","Race/ethnicity","Gender"), times=sapply(list_bars, length)),
+           level=names(unlist(list_bars)))
+
+df_bar$level <- factor(df_bar$level, levels = levels(df_bar$level)[c(11,1,2,3,4,5,14,15,6,10,16,12,9,17,7,8,13)])
+df_bar$rounded <- paste0(round(df_bar$value),"%")
+
+svg("table1_plot.svg", width=5.5, height=4)
+
+df_bar %>%
+  ggplot(aes(x=level, y=value, color=variable)) +
+  geom_segment(aes(yend=0, xend=level), size=1.2) +
+  geom_point(size=2) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=45,hjust=1,vjust=1),
+        panel.spacing = unit(1, "lines"), legend.position = "none") +
+  labs(x=NULL, y="Percent of sample") +
+  geom_text(aes(label=rounded), nudge_y = 10, size=3) +
+  facet_grid(.~variable, scales="free_x", space="free_x") + ggtitle("N = 296") 
+
+
+dev.off()
+ 
+
+
+```
+
+
+The present sample consists of 296 participants from NYC HANES on the basis of self-reported and serum-cotinine-confirmed tobacco use status. As such, the sample is demographically diverse with respect to age (median [range]: `r table1[2,]`), gender (`r t1tx["fem"]`% female), race/ethnicity (`r t1tx["nhw"]`% non-Hispanic White, `r t1tx["nhb"]`% non-Hispanic Black), annual family income (`r t1tx["lt30"]`% less than $30K, `r t1tx["gt60"]`% $60k or more), educational achievement (`r t1tx["hsd"]`% less than high school diploma, `r t1tx["cd"]`% college degree or greater), and birthplace (`r t1tx["us"]`% born in the U.S., Puerto Rico, or U.S. territories). See Table 1 for sample demographic and oral health characteristics.
+
+## Checking collinearity using Cramer's V
+
+```{r cramersV, cache=TRUE, fig.width=5, fig.height=3, eval=FALSE}
+cramer_vars <- c('AGEGRP5C','GENDER','EDU4CAT','INC3C','DMQ_2','RACE','US_BORN','OHQ_3','OHQ_5_3CAT','SMOKER4CAT','DBQ_10_3CAT')
+cramer_varlabs <-c("Age (5 cat)","Gender", "Education (4 cat)","Family Income (3 cat)",
+                "Marital Status","Race/Ethnicity","US- vs. Foreign-Born","Gum Disease","Mouthwash Use",
+                "Smoking Status (4 cat)","Sugar-sweetened beverages (3 cat)")
+df_cramer <- nychanes_full[,cramer_vars]
+names(df_cramer) <- cramer_varlabs
+
+
+
+mtrx_cramersV <- abs(cramersV_matrix(data=df_cramer))
+
+color_args <- list(name="Cramer's V",low = "blue", 
+  high = "darkorange")
+
+
+# Make a triangle
+mtrx_cramersV[lower.tri(mtrx_cramersV)] <- NA
+diag(mtrx_cramersV) <- NA
+mtrx_cramersV <- as.data.frame(mtrx_cramersV)
+
+# Convert to a data frame, and add labels
+df_cramer <- as.data.frame(mtrx_cramersV)
+df_cramer$var2 <- seq_along(rownames(df_cramer))
+
+# Reshape to suit ggplot, remove NAs, and sort the labels
+df_cramer <- na.omit(melt(df_cramer, 'var2', variable.name='var1'))
+df_cramer$var1 <- factor(df_cramer$var1, levels=rev(levels(df_cramer$var1)))
+
+p1 <- ggplot(df_cramer, aes(x=var1, y=var2, fill=value)) +
+    geom_tile() +
+    do.call(scale_fill_gradient, color_args) +
+    scale_y_continuous(breaks=1:11, labels=rev(levels(df_cramer$var1))) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, vjust=1, hjust = 1),
+          legend.position = "none") +
+    labs(x=NULL, y=NULL)
+
+#create boxplot
+mtrx_cramersV$var2 <- rownames(mtrx_cramersV)
+data_boxplot <-  reshape2::melt(mtrx_cramersV, "var2") %>% na.omit %>%
+  mutate(grp=NA, alph=-1*value + 1,
+         Name = paste0(var2, "*", variable))
+p2 <- ggplot(data_boxplot, aes(y=value, x=grp, col=value)) +
+  stat_boxplot(geom="errorbar") +
+  geom_boxplot(outlier.shape=NA) + 
+  geom_jitter(size=2) +
+  do.call(scale_color_gradient, color_args) +
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank(), 
+        axis.title = element_blank(),
+        panel.background = element_blank(), 
+        plot.margin = unit(c(0, 0.1, 4, 0.5), "cm")) 
+
+gt1 <- ggplot_gtable(ggplot_build(p1))
+gt2 <- ggplot_gtable(ggplot_build(p2))
+gt <- gtable(widths = unit(c(5.5, 2.5), "null"), height = unit(8, "null"))
+
+
+# Instert gt1, gt2 and gt3 into the new gtable
+gt <- gtable_add_grob(gt, gt1, 1, 1)
+gt <- gtable_add_grob(gt, gt2, 1, 2)
+grid.newpage()
+grid.draw(gt)
+
+grid.rect(x = 0.5, y = 0.5, height = 0.995, width = 0.995, default.units = "npc", 
+    gp = gpar(col="transparent", fill = NA, lwd = 1))
+
+svg(filename="cramersv.svg", width=6, height=3.5)
+    grid.newpage()
+    grid.draw(gt)
+    
+    grid.rect(x = 0.5, y = 0.5, height = 0.995, width = 0.995, default.units = "npc", 
+        gp = gpar(col="transparent", fill = NA, lwd = 1))
+dev.off()
+
+#high resolution jpg
+const=4
+jpeg(filename="cramersv.jpeg", width=600*const, height=350*const, res=300, pointsize = 1)
+    grid.newpage()
+    grid.draw(gt)
+    
+    grid.rect(x = 0.5, y = 0.5, height = 0.995, width = 0.995, default.units = "npc", 
+        gp = gpar(col="transparent", fill = NA, lwd = 1))
+dev.off()
+
+```
+
+## Abundance
+
+```{r phylum_abundance, warning=FALSE, fig.height=3, fig.width=8, cache=TRUE}
+
+
+set.seed(48)
+phyla_colors1 <- sample( rainbow(n = 8,  start = 0.1, end = 1, s = .5, v=.7), size=8, replace=FALSE)
+phyla_colors1 <- rev( phyla_colors1[c(2,1,3:8)] )
+set.seed(48)
+phyla_colors2 <- sample( rainbow(n = 8,  start = 0.1, end = 1, s = .7, v=.9), size=8, replace=FALSE)
+phyla_colors2 <- rev( phyla_colors2[c(2,1,3:8)] )
+
+phyla_colors <- c(rbind(phyla_colors1[c(1,3,5,7)], phyla_colors2[c(2,4,6,8)]))
+
+g <- plot_abundance(NYC_HANES, PALETTE = phyla_colors, top_n = 8, prop="total")
+
+g <- g + labs(x="└────────────── 296 Samples ───────────────┘", y="",title="") + scale_x_continuous(labels=NULL) + scale_y_continuous(labels=seq(0,100,25))
+
+g
+```
+
+```{r abundance_by, eval=FALSE}
+plot_abundance_by(NYC_HANES, brewerpal = "Set1", by="AGEGRP3C", type="bar")
+plot_abundance_by(NYC_HANES, brewerpal = "Set1", by="RACE", type="bar")
+plot_abundance_by(NYC_HANES, brewerpal = "Set1", by="INC3C", type="bar")
+```
+```{r genus_abundance, fig.height=3, fig.width=5, cache=TRUE}
+
+p <- plot_abundance(NYC_HANES, top_n = 8, PALETTE =  phyla_colors, taxrank="Genus", 
+               prop_of = "total", type="area") 
+p <- p + labs(x="", y="", title="") + scale_x_continuous(labels=NULL) + scale_y_continuous(labels=seq(0,100,25))
+p
+```
+
+```{r abundance_combine, fig.height=6, fig.width=8}
+jpeg(filename = "plot_abundance.jpeg", width = 550*3, height = 700*3, pointsize = 2, res=300)
+grid.arrange(p + theme(plot.margin=unit(c(1,0.95,-0.7,0.1), "cm"),
+                      panel.grid = element_blank()), 
+             g + theme(plot.margin=unit(c(-0.7,0.7,1,-0.1), "cm"),
+                      panel.grid = element_blank()), nrow=2, left="Abundance (%)")
+dev.off()
+
+svg(filename = "plot_abundance.svg", width =8, height = 6)
+grid.arrange(p + theme(plot.margin=unit(c(1,0.95,-0.7,0.1), "cm"),
+                      panel.grid = element_blank()), 
+             g + theme(plot.margin=unit(c(-0.7,0.7,1,-0.1), "cm"),
+                      panel.grid = element_blank()), nrow=2, left="Abundance (%)")
+dev.off()
+
+
+```
+
+
+## Alpha diversity 
+
+```{r alpha_facetgrid, warning=FALSE, message=FALSE, fig.width=12, fig.asp=.6}
+
+
+df_alpha <- cbind(table1_data[table1_data$dataset=="Oral Microbiome Subsample",
+                              -which(names(table1_data) %in% c("Years in United States", "Age (yrs)",
+                                                               "Gum disease (self-reported)",     
+                                                               "Mouthwash use (times per week)",  
+                                                               "Smoking status",
+                                                               "Sugar-sweetened beverages (per week)",
+                                                               "dataset"))  ])
+
+names(df_alpha)[c(3,4,7)] <- c("Educational \nachievement", "Family \nincome","Place of \nbirth")
+
+#calculate p-values
+df_alpha <- cbind(df_alpha, estimate_richness(NYC_HANES, measures = "Chao1")["Chao1"])
+
+ alpha_p <- "\n(P=" %>% paste0(sapply(names(df_alpha), function(i) 
+    kruskal.test(Chao1 ~ eval(as.name(i)), data=df_alpha)$p.value) %>% formatC(digits=2, format = "f")   ) %>%
+   paste0(")")
+
+ names(df_alpha)[-8] %<>% paste0(alpha_p)
+
+
+plot_alpha <- plot_alpha_by(NYC_HANES, metadata=df_alpha[-8], notch=TRUE) 
+
+
+
+svg(filename="plot_alpha.svg", width=12, height = 12*.6)
+  plot_alpha
+dev.off()
+
+plot_alpha
+
+```
+
+### Kruskal Wallace p-values for Choa1 alpha diversity:
+```{r alpha_p}
+
+
+```
+
+### Chao1 alpha diversity regression adjustment by age and gender
+```{r alpha_regression}
+measure.vars <- names(df_alpha)[-ncol(df_alpha)]
+
+list_lm_models <- sapply(measure.vars, function(i) 
+  lm(Chao1 ~ eval(as.name(i))+Gender+`Age group`, data=df_alpha))
+
+
+lapply(list_lm_models, function(i) anova(i)$`Pr(>F)`[1]) %>% unlist
+
+```
+
+## Beta diversity
+```{r distances, cache=TRUE}
+dist_bray <- distance(NYC_HANES, method = "bray")
+dist_js <- distance(NYC_HANES, method="jsd")
+dist_rjs <- sqrt(dist_js)
+dist_wuni <- distance(NYC_HANES, method="wunifrac")
+dist_uni <- distance(NYC_HANES, method="unifrac")
+```
+
+### PERMANOVA
+```{r permanova_one_way, cache=TRUE}
+dist_perm <- dist_wuni
+
+permanova_var_names <- c("AGEGRP5C","GENDER","EDU4CAT","INC3C","DMQ_2","RACE","US_BORN","smokingstatus")
+
+df_permanova <- metadata[, permanova_var_names]
+#creating an NA factor level for INC3C because permanova doesn't allow NAs
+df_permanova$INC3C %<>% as.character
+df_permanova$INC3C[is.na(df_permanova$INC3C)] <- "NA"
+
+
+list_permanovas <- list(
+  `Age (5 cat)` = adonis2(dist_perm ~ AGEGRP5C, data=df_permanova),
+  Gender = adonis2(dist_perm ~ GENDER, data=df_permanova),
+  `Education (4 cat)` = adonis2(dist_perm ~ EDU4CAT, data=df_permanova),
+  `Income (tertiles)` = adonis2(dist_perm ~ INC3C, data=df_permanova),
+  `Marital Status` = adonis2(dist_perm ~ DMQ_2, data=df_permanova),
+  `Race/ethnicity` = adonis2(dist_perm ~ RACE, data=df_permanova),
+  `US-born` = adonis2(dist_perm ~ US_BORN, data=df_permanova),
+  `Smoking status` = adonis2(dist_perm ~ smokingstatus, data=df_permanova)
+)
+
+SumOfSqs <- unlist(lapply(list_permanovas, function(i) i[["SumOfSqs"]][1]))
+r_squared <- sapply(list_permanovas, function(i) 1 - (i$SumOfSqs[2]/sum(i$SumOfSqs)))
+perm_results <- data.frame(
+  SumOfSqs,
+  F = unlist(lapply(list_permanovas, function(i) i[["F"]][1])),
+  p_value = unlist(lapply(list_permanovas, function(i) i[["Pr(>F)"]][1]))
+)
+
+perm_results <- perm_results[names(sort(SumOfSqs, decreasing = TRUE)),]
+```
+```{r permanova_oneway_print}
+knitr::kable( perm_results)
+
+```
+
+### (PCoA on weighted UniFrac distances)
+```{r distance, cache=TRUE, warning=FALSE}
+#calculate distances
+
+dist_bray <- phyloseq::distance(NYC_HANES, method = "bray")
+dist_js <- phyloseq::distance(NYC_HANES, method="jsd")
+dist_rjs <- sqrt(dist_js)
+dist_wuni <- phyloseq::distance(NYC_HANES, method="wunifrac")
+dist_uni <- phyloseq::distance(NYC_HANES, method="unifrac")
+
+
+
+#set the distance to use throughout
+dist_use <- dist_wuni
+
+
+```
+
+```{r PCoA_calc, cache=TRUE}
+ord_bray <- ordinate(NYC_HANES, method="PCoA", distance=dist_bray)
+ord_wunifrac <- ordinate(NYC_HANES, method="PCoA", distance=dist_wuni)
+```
+```{r PCoA_plot, fig.width=5, fig.height=5, cache=TRUE}
+ord <- ord_wunifrac
+
+plot_ordination(NYC_HANES, ord, color="US_BORN") + 
+  ggtitle(paste0("PCoA by Birthplace (p=", perm_results$p_value[7],")" )) + 
+  theme(legend.position = "bottom") + 
+  guides(color=guide_legend(nrow=2, title = NULL))
+plot_ordination(NYC_HANES, ord, color="RACE")
+plot_ordination(NYC_HANES, ord, color="AGEGRP5C") +
+  ggtitle(paste0("PCoA by Age (p=", perm_results$p_value[2],")" )) + 
+  theme(legend.position = "bottom") + 
+  guides(color=guide_legend(nrow=2, title = NULL))
+plot_ordination(NYC_HANES, ord, color="GENDER") + ggtitle("PCoA by Gender")
+plot_ordination(NYC_HANES, ord, color="EDU4CAT") +
+  ggtitle(paste0("PCoA by Education (p=", perm_results$p_value[4],")" )) + 
+  theme(legend.position = "bottom") + 
+  guides(color=guide_legend(nrow=2, title = NULL))
+plot_ordination(NYC_HANES, ord, color="INC3C") + ggtitle("PCoA by Income")
+plot_ordination(NYC_HANES, ord, color="DMQ_2") + ggtitle("PCoA by Marital Status")
+plot_ordination(NYC_HANES, ord, color="DMQ_7YEAR") + ggtitle("PCoA by Years in US")
+plot_ordination(NYC_HANES, ord, color="GLUCOSE") + ggtitle("PCoA by Glucose")
+plot_ordination(NYC_HANES, ord, color="OHQ_3") + ggtitle("PCoA by Gum Disease")
+plot_ordination(NYC_HANES, ord, color="OHQ_5_3CAT") + ggtitle("PCoA by Days Mouthwash Used")
+```
+
+### Between vs. within group differences (boxplots)
+
+```{r compare_beta_diversity, cache=TRUE, fig.width=5, fig.height=5}
+source("summaryPlots.R")
+pb <- plot_beta_by(pseq=NYC_HANES, vars = permanova_var_names, dist_mtrx = dist_perm)
+
+pb <- pb+ theme(legend.title = element_blank(),
+                strip.text.x = element_blank(),
+                axis.text.x = element_text(angle=60,hjust=1,vjust=1),
+                legend.position = "bottom") +
+  scale_x_discrete(name=NULL, breaks=permanova_var_names,
+                   labels=c("Age (5 cat)", "Gender","Education (4 cat)","Income (3 cat)",
+                            "Marital Status","Race/ethnicity","Nativity","Smoking Status")) +
+  scale_fill_brewer(palette = "Set2", labels=c("Within group","Between groups")) +
+  scale_color_brewer(palette = "Set2", guide="none") +
+  labs(y="Weighted UniFrac Distance")
+
+
+pb
+
+
+
+cairo_pdf(filename = "plot_beta.pdf",width = 5,height=5)
+  pb
+dev.off()
+
+
+
+
+```
+
+## Clustering 
+
+### Hierarchical clustering dendrogram
+
+```{r hierarchical_clustering, cache=TRUE}
+
+clusters <- hclust(dist_use)
+dend <- as.dendrogram(clusters) %>% color_branches(k=5)
+par(mar=rep(0,4))
+circlize_dendrogram(dend, labels=FALSE, 
+                    labels_track_height = NA,
+                    dend_track_height = .8)
+
+```
+
+
+### Cluster validation
+
+```{r enterotype_calc, cache=TRUE}
+
+
+ps_bray <- prediction.strength(dist_bray, Gmin = 2, Gmax = 10, clustermethod = pamkCBI)
+ps_js <- prediction.strength(dist_js, Gmin = 2, Gmax = 10, clustermethod = pamkCBI)
+ps_rjs <- prediction.strength(dist_rjs,Gmin = 2, Gmax = 10, clustermethod = pamkCBI)
+ps_uni <- prediction.strength(dist_uni, Gmin = 2, Gmax = 10, clustermethod = pamkCBI)
+ps_wuni <- prediction.strength(dist_wuni, Gmin=2, Gmax=10, clustermethod = pamkCBI)
+```
+```{r enterotype_plot, cache=TRUE, fig.width=6, fig.height=3.5}
+
+
+list_ps <- list(ps_bray, ps_js, ps_rjs, ps_uni, ps_wuni)
+ggPredStrength(list_ps, x.text=8,
+               labs=c("Bray Curtis","Jensen-Shannon","root-Jensen Shannon","UniFrac","Weighted Unifrac")) +
+  labs(y="Prediction Strength", x="Number of PAM clusters")
+
+
+```
+
+
+
+
+
+# edgeR Differential Abundance
+
+```{r check_filter, cache=TRUE, eval=FALSE}
+#plot curve of # of OTUs remaining against count required in 3 or more samples
+z <- cbind(0:296, sapply(0:296, function(i) table(rowSums(otu_table(NYC_HANES) > i) > 2)["TRUE"]))
+plot(z, type="l",xlab="Count required by 3 or more",  ylab="# of OTUs remaining")
+abline(v=8, lty=3)
+
+
+#checking how many OTUs get filtered out by the default criteria, 20% with more than 2 counts
+otus <- as(otu_table(NYC_HANES), "matrix")
+dge <- DGEList(counts = otus)
+nMinimumHaveCount = 3
+keep <- rowSums(dge$counts >= 8 ) >= nMinimumHaveCount
+dge <- dge[keep, , FALSE] 
+nrow(dge)
+  
+```
+
+
+
+
+
+## Tileplot - OTU
+```{r otu_occurances_varlevels, cache=TRUE, fig.height=5.3, fig.width=11}
+
+model_vars = c('GENDER','AGEGRP3C','EDU3CAT','INC3C','DMQ_2','RACE','US_BORN')
+model_varlabs = c('Gender (5)','Age (52)','Education (14)','Family income (23)','Marital status (17)','Race/ethnicity (27)','US- vs. foreign-born (12)')
+
+#Get a dataframe of toptags from all models
+df_tile <- get_all_edgeR_models(model_vars, model_varlabs, to.data.frame=TRUE)
+
+#Attach genus information
+df_tile %<>% left_join(data.frame(OTU=rownames(tax_table(NYC_HANES)), Genus = tax_table(NYC_HANES)[,"Genus"]))
+
+#Sort genus by decreasing number of appearances
+df_tile$Genus <- factor(df_tile$Genus, levels=names(sort(table(df_tile$Genus), decreasing = TRUE)))
+
+
+#create a translator dataframe for coefficient labels and left join it to the toptags dataframe
+varnames <- c("GENDER","AGEGRP3C","EDU3CAT","INC3C","DMQ_2","RACE","US_BORN")
+varlevels <- unlist(sapply(varnames, function(i) levels(factor(eval(as.name(i), envir = metadata)))[-1]))
+varlabs <- c("Gender","Age group (3 cat)","Education (3 cat)","Income (3 cat)","Marital Status","Race/ethnicity","U.S. vs. foreign-born")
+times <- sapply(varnames, function(i) nlevels(factor(eval(as.name(i), envir = metadata)))-1)
+df_translate <- data.frame(coef=paste0(rep(varnames, times=times), varlevels),
+                           varlevel=varlevels,
+                           coef_lab=paste(rep(varlabs, times=times),
+                                          "=",varlevels),
+                           stringsAsFactors = FALSE)
+df_tile %<>% left_join(df_translate, by="coef")
+
+df_tile$varlevel %<>% factor(levels = rev(levels(factor(df_tile$varlevel))[c(2,3,  15,7,  1,9,  12,8,4,13, 6,  10,11,14,16,5)]))
+df_tile$variable %<>% as.factor()
+
+plot_logfc <- df_tile %>% na.omit %>% 
+    ggplot(aes(x=Genus, y=varlevel, fill=logFC)) +
+    geom_tile(color="black") + theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, vjust=1, hjust = 1), strip.placement = "outside",
+          panel.spacing = unit(.5, "line")) +
+    scale_fill_gradient2(low = "seagreen4", mid = "white", high = "purple3") +
+    labs(y=NULL, x=NULL) +
+    facet_grid(variable~., scale="free_y", space="free_y", switch = "y") + 
+    theme(strip.text.y = element_text(angle=180, hjust=0), legend.position = c(-.4,-.2), legend.direction = "horizontal",
+          legend.key.size = unit(.45, "cm"))
+
+plot_logfc 
+
+```
+
+## Tileplot - Oligotypes
+```{bash generate tree}
+
+
+f="/CM/projects/fbeghini_oralMicrobiome/NYDH_smoking_pilot_fastq/oligotyping/Neisseria_otus-sc29-s10-a8.0-A0-M100/ /CM/projects/fbeghini_oralMicrobiome/NYDH_smoking_pilot_fastq/oligotyping/Prevotella_otus-sc62-s10-a10.0-A0-M800/ /CM/projects/fbeghini_oralMicrobiome/NYDH_smoking_pilot_fastq/oligotyping/streptococcus_otus-sc80-s10-a5.0-A0-M1000/"
+
+#for x in $f; do
+#muscle -in $x/OLIGOS.fasta -out $x/OLIGOS.aln
+#FastTreeMP-2.1.9-SSE3 -nt < $x/OLIGOS.aln > $x/OLIGOS.tre
+#done
+```
+
+```{r Import oligotyping output}
+
+
+
+f <- c("Neisseria","Prevotella","Streptococcus")
+
+phylo.otut <- list()
+
+for (x in f) {
+  otumap <- read.table(paste("../input/", x,"_MATRIX-COUNT.txt", sep = ""),  header = T,row.names = 1) %>% t
+  taxmat <- matrix(sample(letters, 7*nrow(otumap), replace = TRUE), nrow = nrow(otumap), ncol = 7)
+  rownames(taxmat) <- rownames(otumap)
+  colnames(taxmat) <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+  otu.tree <- read.tree(paste("../input/", x, "_OLIGOS.tre", sep = ""))
+  
+  phylo.otut[x] <- phyloseq(otu_table(otumap, taxa_are_rows = TRUE), tax_table(taxmat), phy_tree(otu.tree),sample_data(NYC_HANES)[colnames(otumap),]) 
+  #%>% transform_sample_counts(function(x) x/sum(x))
+}
+
+```
+
+
+```{r oligo_edger, cache=TRUE, fig.width=10, fig.height=3.5}
+#relevel education and income according to new levels in annotateFactors()
+levels(sample_data(phylo.otut$Neisseria)$EDU3CAT) <- 
+  levels(sample_data(phylo.otut$Prevotella)$EDU3CAT) <- 
+  levels(sample_data(phylo.otut$Streptococcus)$EDU3CAT) <- levels(metadata$EDU3CAT)
+levels(sample_data(phylo.otut$Neisseria)$INC3C) <- 
+  levels(sample_data(phylo.otut$Prevotella)$INC3C) <- 
+  levels(sample_data(phylo.otut$Streptococcus)$INC3C) <- levels(metadata$INC3C)
+
+#get all models for each oligotype pseq
+df_neisseria <- get_all_edgeR_models(vars=model_vars, varlabels = model_varlabs, pseq=phylo.otut$Neisseria)
+df_prevotella <- get_all_edgeR_models(vars=model_vars, varlabels = model_varlabs, pseq=phylo.otut$Prevotella)
+df_streptococcus <- get_all_edgeR_models(vars=model_vars, varlabels = model_varlabs, pseq=phylo.otut$Streptococcus)
+
+#combine into one data.frame for plotting
+df_oligotypes <- rbind(data.frame(df_neisseria, Genus="Neisseria"),
+                       data.frame(df_prevotella, Genus="Prevotella"),
+                       data.frame(df_streptococcus, Genus="Streptococcus"))
+#attach coefficient level labels
+df_oligotypes %<>% left_join(df_translate, by="coef")
+
+#plot
+plot_oligo <- df_oligotypes %>%
+    ggplot(aes(x=OTU, y=coef_lab, fill=logFC)) +
+    geom_tile(color="black") + theme_minimal() +
+    theme(axis.text.x = element_blank(), panel.spacing = unit(.75, "cm")) +
+    scale_fill_gradient2(low = "seagreen4", mid = "white", high = "purple3") +
+    labs(y=NULL, x="Oligotype")  +
+    facet_grid(.~Genus,scales="free_x", space="free_x", drop=TRUE)
+
+svg(filename = "plot_oligo.svg", width=9, height=3)
+  plot_oligo
+dev.off()
+plot_oligo
+```
+```{r tileplot_combine, fig.width=10, fig.height=8}
+svg(filename = "plot_logfc.svg", height = 7.8, width=10)
+grid.arrange(plot_logfc, plot_oligo, heights=c(4,3.3))
+dev.off()
+```
+
+
+## Table of strongest associations, and important genera, for each variable (by logFC)
+
+```{r strongest_associations}
+
+df_tile$logFC %<>% as.numeric
+df_strongest <- df_tile  %>% arrange(variable, desc(abs(logFC))) %>%
+  group_by(variable) %>% 
+  filter(!duplicated(Genus))%>%  
+  top_n(5, wt=logFC)  %>% 
+  select(variable, varlevel, Genus, logFC, FDR) 
+
+
+
+df_important_genera <- df_tile %>% 
+  #filter(Genus %in% c("Fusobacterium","Porphyromonas","Pseudomonas","Prevotella","Lactobacillus","Lactococcus")) %>%
+  group_by(variable) %>% arrange(variable, desc(abs(logFC))) %>% filter(!duplicated(Genus)) %>% select(variable, varlevel, Genus, logFC, FDR)
+options(scipen = 999)
+df_important_genera$FDR %<>% format.pval(eps = .0001, digits=1)
+df_important_genera$logFC %<>% round(1)
+df_important_genera %<>% mutate(abundance=ifelse(logFC>0, "greater","less") %>% factor(levels=c("greater","less")))
+df_important_genera$result <- paste0(df_important_genera$Genus, " (logFC ", df_important_genera$logFC, ", FDR ", df_important_genera$FDR, ")")
+df_important_genera %<>% select(-FDR,-Genus) %>% arrange(variable, abundance)
+df_important_genera %<>% ungroup
+
+
+#filtering by logFC >= 2
+df_important_filter <- df_important_genera[df_important_genera$logFC >= 2, ]
+
+make_sentence <- function(x) {
+  sentence = x[1]
+  if(length(x) > 1) {
+    if(length(x) > 2) {
+      for(i in 2:(length(x)-1)) {
+        sentence <- paste0(sentence, ", ", x[i])
+      }
+    }
+    sentence = paste0(sentence, ", and ", x[length(x)])
+  }
+  sentence
+}
+
+
+df_sentences <- df_important_filter %>% group_by(variable, varlevel, abundance) %>% summarize(sent = make_sentence(unique(result))) %>%
+  mutate(sent = paste0(abundance, " abundance of ", sent))
+
+kable(df_sentences)
+
+
+```
+
+```{r cache=TRUE}
+genus_in_variable <- function(x, list_models)  {
+  lst <- lapply(list_models, function(i) x %in%  unlist(lapply(i, function(k) (as.data.frame(k))$Genus)))
+  out <- names(lst[lst==TRUE])
+  paste(out, collapse=", ")
+}
+  
+genera_of_interest <- list("Lactobacillus","Prevotella","Porphyromonas", "Atopobium", "Pseudomonas", 
+                        "Streptococcus", "Alloprevotella", "Fusobacterium", "Lactococcus", "Campylobacter")  
+
+model_vars_list <- c(model_vars, "smokingstatus","OHQ_5_3CAT","DBQ_10_3CAT","OHQ_3")
+model_varlabs_list <- c(model_varlabs, "smoking status","mouthwash use","sugar-sweetened beverages","gum disease")
+
+list_models <- get_all_edgeR_models(vars=model_vars_list, varlabels=model_varlabs_list,to.data.frame = FALSE)
+lst <- sapply(genera_of_interest, genus_in_variable, list_models)
+names(lst) <- genera_of_interest
+```
+```{r values_for_text}
+sig_otus <- function(toptags_list) {
+  unique(unlist(lapply(toptags_list, function(i) rownames(i))))
+} 
+
+all_variables_sig_OTUs <- c("all_variables" = length(unique(
+  unlist(lapply(
+    list_models, sig_otus)))))
+
+by_variable_sig_OTUs <- unlist(lapply(list_models, function(i) 
+  length(sig_otus(i))))
+
+c(all_variables_sig_OTUs, by_variable_sig_OTUs)
+```
+
+
+## Text for results section
+
+A total of `r all_variables_sig_OTUs` OTUs were significantly differentially abundant by any variable, including `r by_variable_sig_OTUs["Age"]` by age group, `r by_variable_sig_OTUs["Race/ethnicity"]` by race/ethnicity, `r by_variable_sig_OTUs["Family income"]` by family income, `r by_variable_sig_OTUs["Marital Status"]` by marital status, `r by_variable_sig_OTUs["Education"]` by education, `r by_variable_sig_OTUs["US- vs. foreign-born"]` by nativity, and `r by_variable_sig_OTUs["Gender"]` by gender.  To contextualize effect sizes and number of significant taxa, we also looked at differential abundance by behavioral variables: mouthwash use showed `r by_variable_sig_OTUs["mouthwash use"]` OTUs differentially abundant, self-reported gum disease showed `r by_variable_sig_OTUs["gum disease"]`, smoking status showed `r by_variable_sig_OTUs["smoking status"]`, and sugar-sweetened beverage consumption showed `r by_variable_sig_OTUs["sugar-sweetened beverages"]`.
+
+
+Many of these OTUs were significant in more than one variable. The most frequent genera to be differentially abundant were Lactobacillus (all variables), Prevotella (`r lst["Prevotella"]`), Porphyromonas (`r lst["Porphyromonas"]`), Atopobium (`r lst["Atopobium"]`), Pseudomonas (`r lst["Pseudomonas"]`), Streptococcus (`r lst["Streptococcus"]`), Alloprevotella (`r lst["Alloprevotella"]`), Fusobacterium (`r lst["Fusobacterium"]`), Lactococcus (`r lst["Lactococcus"]`), and Campylobacter (`r lst["Campylobacter"]`).
+
+
+We present data here for differential abundance comparisons where the log fold change was 2 or greater, representing a particularly strong association. Compared to individuals aged 20-34, individuals aged 65 and over displayed `r df_sentences$sent[df_sentences$varlevel=="65 and over"]`. Compared to individuals with a high school degree or less, those with some college or an associate's degree showed `r df_sentences$sent[df_sentences$varlevel=="Some College or Associate's Degree"]`. Individuals with annual family incomes between \$30,000 and \$60,000 had `r df_sentences$sent[df_sentences$varlevel=="$30,000 - $60,000"]`, compared to those making less than \$30,000. Marital status showed a large number of strong associations: compared to being married, those living with a partner showed `r df_sentences$sent[df_sentences$varlevel=="Living with partner"]`, those separated showed `r df_sentences$sent[df_sentences$varlevel=="Separated"]`, and those who were widowed, `r df_sentences$sent[df_sentences$varlevel=="Widowed"]`. Compared to non-Hispanic whites, Asians had `r df_sentences$sent[df_sentences$varlevel=="Asian"]`, and non-Hispanic Blacks had `r df_sentences$sent[df_sentences$varlevel=="Non-Hispanic Black"]`.
+
+
+
+
+```{r tileplot_top_8, fig.width=9, eval=FALSE}
+## Tileplot for top 8 genera (for presentation)
+
+edger_summary_plot(list_models, top_n_genera = 15) + 
+  theme(axis.text = element_text(size=17), axis.title = element_text(size=19)) + 
+  ggtitle("") +
+  scale_y_discrete(position="right")
+```
+
+
+## Boxplots of crude vs. adjusted
+
+```{r edger_crude_vs_adjusted_calc, cache=TRUE}
+
+
+vars <- c("GENDER","AGEGRP3C","EDU3CAT", "INC3C", "DMQ_2", "RACE", "US_BORN" )
+varlabels <- c("Gender", "Age", "Education", "Family income", "Marital status", 
+               "Race/ethnicity", "US- vs. foreign-born")
+
+df_crude <- df_tile
+df_crude_nofilter <- get_all_edgeR_models(vars=vars, varlabels=varlabels, alph=1)
+df_ohq <- get_all_edgeR_models(vars=vars, varlabels = varlabels, adjusted_for="OHQ_5_3CAT", alph=1) %>% dplyr::rename(logFC_ohq = logFC)
+
+df_smoke <- get_all_edgeR_models(vars=vars, varlabels = varlabels, adjusted_for="smokingstatus", alph=1) %>% dplyr::rename(logFC_smoke = logFC)
+
+df_age_gender <- get_all_edgeR_models(vars=vars, varlabels = varlabels, adjusted_for=c("AGEGRP3C","GENDER"), alph=1) %>% dplyr::rename(logFC_age_gender = logFC)
+
+df_sugar <- get_all_edgeR_models(vars=vars, varlabels = varlabels, adjusted_for=c("DBQ_10_3CAT"), alph=1) %>% dplyr::rename(logFC_sugar = logFC)
+
+```
+
+```{r edger_crude_vs_adjusted_print, fig.width=7, fig.height=4.5}
+
+df_crude[,c(1,2,4)] %<>% lapply(as.character)
+df_crude_nofilter[,c(1,2,4)] %<>% lapply(as.character)
+df_ohq[,c(1,2,4)] %<>% lapply(as.character)
+df_smoke[,c(1,2,4)] %<>% lapply(as.character)
+df_age_gender[,c(1,2,4)] %<>% lapply(as.character)
+df_sugar[,c(1,2,4)] %<>% lapply(as.character)
+
+create_crude_vs_adjusted_boxplot_df <- function(df_crude) {
+  df_crude %<>% inner_join(df_ohq, by=c("OTU","coef","variable")) %>%
+    inner_join(df_smoke, by=c("OTU","coef","variable")) %>%
+    inner_join(df_age_gender, by=c("OTU","coef","variable"))%>%
+    inner_join(df_sugar, by=c("OTU","coef","variable"))
+  
+  df_crude[,grep("logFC", names(df_crude))] %<>% lapply(function(i) abs(as.numeric(i)))
+  df_crude$smoke_diff <- (df_crude$logFC_smoke - df_crude$logFC) / df_crude$logFC
+  df_crude$ohq_diff <- (df_crude$logFC_ohq - df_crude$logFC) / df_crude$logFC
+  df_crude$agegender_diff <- (df_crude$logFC_age_gender - df_crude$logFC) / df_crude$logFC
+  df_crude$sugar_diff <- (df_crude$logFC_sugar - df_crude$logFC) / df_crude$logFC
+  df_crude
+}
+
+df_fdr <- create_crude_vs_adjusted_boxplot_df(df_crude)
+df_nofdr <- create_crude_vs_adjusted_boxplot_df(df_crude_nofilter)
+
+#for boxplot comparing absolute values (FDR)
+df_fdr_melt <- melt(df_fdr, id.vars = "variable",measure.vars = c("logFC","logFC_ohq","logFC_smoke","logFC_age_gender","logFC_sugar"),
+                    variable.name = "logFC")
+names(df_fdr_melt) <- c("variable", "logFC","value" )
+
+dodge_amount = 1
+
+figure5 <- ggplot(df_fdr_melt, aes(y=value, x=variable, fill=logFC)) +
+  stat_boxplot(geom="errorbar", position=position_dodge(dodge_amount)) +
+  geom_boxplot(outlier.shape=NA, alpha=.3, position=position_dodge(dodge_amount)) +
+  geom_point(aes(color=logFC), size=.5, position=position_jitterdodge(jitter.width=.3, dodge.width = dodge_amount)) +
+  scale_fill_discrete(labels=c("Crude","Adjusted for Mouthwash Use",
+                               "Adjusted for Smoking","Adjusted for Age and Gender","Adjusted for Sugar-sweetened Beverage Consumption"), name="") +
+  scale_color_discrete(guide="none")+
+  theme_minimal() +
+  guides(fill=guide_legend(ncol=2)) +
+  theme(axis.text.x = element_text(angle=40,hjust=1,vjust=1), legend.position = "top", panel.spacing = unit(.6, "lines"),
+        strip.text = element_blank()) +
+  labs(y="Absolute Value of logFC", x=NULL) +
+  facet_grid(.~variable, scales="free_x", space="free_x")
+
+svg(filename = "plot_adjusted.svg", height=4.5, width=7)
+  figure5
+dev.off()
+
+```
+
+
+## Up/down table of each variable and Streptococcus, Lactobacillus, Lactococcus, Prevotella, Porphyromonas, Fusobacterium
+
+```{r results='asis'}
+
+
+df_table <- df_crude %>% mutate(direction=ifelse(as.numeric(logFC)>0, "Greater abundance in:","Lower abundance in:"))
+
+commalist <- function(x) {
+  sentence = x[1]
+  if(length(x) > 1) {
+    for(i in 2:(length(x))) {
+      sentence <- paste0(sentence, "<br> ", x[i])
+    }
+  }
+  sentence
+}
+
+
+selected_genera = c("Streptococcus", "Lactobacillus", "Lactococcus", "Prevotella", "Porphyromonas", "Fusobacterium")
+
+reference_groups = sapply(vars, function(i) levels(metadata[[i]])[1])
+names(reference_groups) <- varlabels
+
+
+
+
+df_table %>% filter(Genus %in% selected_genera) %>% group_by(Genus, direction) %>% summarize(lst = commalist(unique(as.character(coef_lab))) ) %>% reshape2::dcast(Genus ~ direction) %>% kable(format="markdown") %>%
+  kable_styling(bootstrap_options = "condensed")
+
+
+tfooter = paste0("Reference groups for sociodemographic variables are as follows: ",
+                 paste(paste0(names(reference_groups), ": ", reference_groups), collapse=", "))
+tfooter
+
+```
+
+
+# edgeR Exploratory Analysis
+
+## Histograms of p-values
+```{r hist_p_calc, cache=TRUE}
+source("edgeR_functions.R")
+
+p_age <- edger_get_p(~AGEGRP5C)
+p_gender  <- edger_get_p(~GENDER)
+p_edu <- edger_get_p(~EDU4CAT)
+p_inc <- edger_get_p(~INC3C) 
+p_marit <- edger_get_p(~DMQ_2)
+p_race <- edger_get_p(~RACE)
+p_usborn <- edger_get_p(~US_BORN)
+
+
+#create data frame of p-value, variable
+var_list = list(p_age, p_gender, p_edu, p_inc, p_marit, p_race, p_usborn)
+var_names <- c("AGEGRP5C","GENDER","EDU4CAT","INC3C","DMQ_2","RACE","US_BORN")
+var_labels <-  c("Age group (5 cat.)","Gender", "Education (4 cat.)", 
+                 "Income (tertiles)","Marital Status","Race","Birthplace")
+df_p_hist <- data.frame(p = unlist(var_list), 
+                        var_label = rep(var_labels, 
+                                       times = unlist(lapply(var_list, length))),
+                        var_name = rep(var_names, 
+                                      times= unlist(lapply(var_list, length))))
+```
+
+```{r p_hist_plot}
+
+n_bins <- 100
+#get the count of p-values within each variable
+df_p_hist %<>% group_by(var_name) %>% mutate(count = max(row_number())) %>% ungroup
+
+df_p_hist %>% 
+  ggplot(aes(x = p, fill=var_label)) +
+  geom_histogram(bins=n_bins) +
+  #geom_histogram(aes(y=..count../sum(..count..)), bins=n_bins) +
+  facet_wrap(~ var_label, scales="free_y",nrow=3) +
+  geom_hline(aes(yintercept = count/n_bins)) +  
+  theme(axis.text.x = element_text(size = 10, angle = 90, hjust = 1),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid.minor = element_blank(), 
+        legend.position="none")  +
+  labs(title = "Raw p-values", y="Relative frequency", x="Raw P-Value")
+
+
+
+```
+
+## Heatmap of all OTUs against all sociodemographics
+
+```{r all_against_all, cache=TRUE, fig.height=7, fig.width=10}
+FDR_alpha <- 0.1
+
+heatmap_vars <- variablesToLook[ which(!variablesToLook %in% c("SPAGE","DMQ_7YEAR","GLUCOSE","A1C"))]
+
+
+ref_edger <- get_edgeR_results(~GENDER, coef=2, alph=999)$table
+rowname_reference <- sample(rownames(ref_edger), size=nrow(ref_edger), replace=TRUE)
+
+
+heatmap_matrix <- do.call(cbind, lapply(heatmap_vars, function(VAR) {
+  do.call(cbind, lapply(2:length(levels(metadata[,VAR])), 
+                        function(i) abs(get_edgeR_results(as.formula(paste("~", VAR)), 
+                                                      coef=i, 
+                                                      alph=999)$table[rowname_reference, "logFC"])))
+}))
+heatmap_matrix_is_sig <- do.call(cbind, lapply(heatmap_vars, function(VAR) {
+  do.call(cbind, lapply(2:length(levels(metadata[,VAR])), 
+                        function(i) abs(get_edgeR_results(as.formula(paste("~", VAR)), 
+                                                      coef=i, 
+                                                      alph=999)$table[rowname_reference, "FDR"])))
+})) 
+heatmap_matrix_sig <- ifelse(heatmap_matrix_is_sig >= FDR_alpha, NA, heatmap_matrix)
+
+
+rownames(heatmap_matrix) <- rowname_reference
+colnames(heatmap_matrix) <- unlist(lapply(heatmap_vars, function(VAR) paste(VAR, levels(metadata[,VAR])[-1])))
+
+#remove some NA factor levels by hand (ugh)
+heatmap_matrix <- heatmap_matrix[,-which(colnames(heatmap_matrix) %in% c("OHQ_3 NA","US_BORN NA"))]
+
+my_palette <- colorRampPalette(c("lightblue","yellow","darkorange"))(n = 20)
+gplots::heatmap.2(t(heatmap_matrix), key.xlab="Abs(logFC)", trace="none", density.info = "none", col=my_palette)
+
+```
+
+
+
+
+## Analyzing contradictions between oligotyping and 16S OTUs.
+
+```{r cache=TRUE}
+ge = function(LOL) get_all_edgeR_models(model_vars, model_varlabs,to.data.frame = FALSE, pseq=phylo.otut[[LOL]])
+
+list_models_neisseria <- ge("Neisseria")
+list_models_strep <- ge("Streptococcus")
+list_models_prevotella <- ge("Prevotella")
+
+
+genera_otu <- lapply(list_models, function(i) lapply(i, function(j) as.character(j$table[["Genus"]])))
+genera_otu <- do.call(c, genera_otu)
+names(genera_otu) <- rep(names(list_models), times=sapply(list_models, length))
+
+prev_otu <- names(genera_otu)[sapply(genera_otu, function(i) "Prevotella" %in% i)]
+strep_otu <-  names(genera_otu)[sapply(genera_otu, function(i) "Streptococcus" %in% i)]
+neis_otu <- names(genera_otu)[sapply(genera_otu, function(i) "Neisseria" %in% i)]
+
+prev_olig <- names(list_models_neisseria)
+strep_olig <- names(list_models_strep)
+neis_olig <- names(list_models_neisseria)
+
+commaList <- function(x) {
+  if(length(x)<2) res=x else  res=paste0(paste(x[-length(x)], collapse=", "), " and ", x[length(x)])
+  tolower(res)
+}
+
+#things that showed up in oligotyping but not in OTU
+prev_new_asc <-commaList(setdiff(prev_olig, prev_otu))
+strep_new_asc <- commaList(setdiff(strep_olig, strep_otu))
+neis_new_asc <- commaList(setdiff(neis_olig, neis_otu))
+
+#things that disappeared in oligotying
+prev_disp_asc <-commaList(setdiff(prev_otu,prev_olig))
+strep_disp_asc <- commaList(setdiff(strep_otu,strep_olig))
+neis_disp_asc <- commaList(setdiff(neis_otu, neis_olig))
+
+```
+
+<i>Prevotella</i> oligotypes revealed new associations for `r prev_new_asc`, <i>Streptococcus</i> showed associations for `r strep_new_asc`, and <i>Neisseria</i>, for `r neis_new_asc`.
+
+Associations that were present in OTU analysis but disappeared in oligotyping were `r prev_disp_asc` in <i>Prevotella</i> and the only OTU association with <i>Neisseria</i>, `r neis_disp_asc`. 
+
+# Attempts at dimension reduction on sociodemographics
+
+
+
+```{r permanova_multi_way, cache=TRUE, eval=FALSE}
+
+
+permanova2 <- adonis2(dist_use ~ ., data=df_permanova)
+
+calc_AIC <- function(permanova2, df=df_permanova) {
+  k <- nrow(permanova2) -1
+  RSS <- permanova2$SumOfSqs[k+1]
+  n <- nrow(na.omit(df))
+  AIC <- 2*k + n*(log( (2*pi) * (RSS/n)) + 1)
+  AIC
+}
+
+allFormulasMatrix <- do.call(expand.grid, lapply(1:length(var_labels), function(i) c(TRUE, FALSE)) )
+colnames(allFormulasMatrix) <- var_names
+allFormulasList <- apply(allFormulasMatrix, 1, function(x) as.formula(
+                       paste(c("dist_use ~ 1", var_names[x]),
+                             collapse=" + ")) )
+
+allModelsList <- lapply(allFormulasList, function(i) adonis2(i, data=df_permanova))
+
+#get AIC from all models
+allModelsAIC <- unlist(lapply(allModelsList, calc_AIC))
+#select lowest AIC
+bestModel <- allModelsList[[which.min(allModelsAIC)]]
+
+```
+
+```{r permanova_print, eval=FALSE}
+bestModel
+```
+
+# Appendix 1: Abandoned attempts at sociodemographic dimension reduction
+
+## PCoA on Sociodemographic Variables
+```{r pca_socio, cache=TRUE}
+source("pca_utils.R")
+pca_vars <- c(variablesToLook[!variablesToLook %in% c("A1C","GLUCOSE","SPAGE","AGEGRP3C","EDU3CAT","DMQ_7YEAR")], "SMOKER4CAT")
+df_pca <- nychanes_full[,pca_vars]
+df_pca$`Age (5 cat)` <- df_pca$AGEGRP5C
+df_pca$Gender <- df_pca$GENDER
+df_pca$`Education (4 cat)` <- df_pca$EDU4CAT
+df_pca$`Family Income (3 cat)` <- df_pca$INC3C
+df_pca$`Marital Status` <- df_pca$DMQ_2
+df_pca$`Race/Ethnicity` <- df_pca$RACE
+df_pca$`US- vs. Foreign-Born` <- df_pca$US_BORN
+df_pca$`Gum Disease` <- df_pca$OHQ_3
+df_pca$`Mouthwash Use` <- df_pca$OHQ_5_3CAT
+df_pca$`Smoking Status (4 cat)` <- factor(df_pca$SMOKER4CAT)
+
+df_pca <- df_pca[,-which(names(df_pca) %in% pca_vars)]
+
+mtrx_cramersV  <- 1 - abs(cramersV_matrix(data=df_pca))
+
+
+pcoa <- ape::pcoa(mtrx_cramersV)
+pcoa
+```
+
+```{r pcoa_plots_for_pres, cache=TRUE}
+r2_smoke <- c(r2=list_permanovas$`Smoking status`$SumOfSqs[1] /                                                             sum(list_permanovas$`Smoking status`$SumOfSqs), p=list_permanovas$`Smoking status`$`Pr(>F)`[1])
+r2_edu <- c(r2=list_permanovas$`Education (4 cat)`$SumOfSqs[1] /                                                             sum(list_permanovas$`Education (4 cat)`$SumOfSqs), p=list_permanovas$`Education (4 cat)`$`Pr(>F)`[1])
+r2_age <- c(r2=list_permanovas$`Age (5 cat)`$SumOfSqs[1] /                                                             sum(list_permanovas$`Age (5 cat)`$SumOfSqs), p=list_permanovas$`Age (5 cat)`$`Pr(>F)`[1])
+
+
+ord <- ordinate(NYC_HANES, method = "PCoA", distance="UniFrac")
+pcoa_edu <- plot_ordination(NYC_HANES, ordination = ord, color="EDU3CAT")
+
+ord <- NYC_HANES %>%
+  subset_samples(smokingstatus %in% c("Cigarette","Never smoker")) %>%
+  ordinate(method="PCoA", distance="wunifrac")
+
+plot_ordination(NYC_HANES, ord, color="smokingstatus") + geom_point(shape=5) + stat_ellipse(type = "t", linetype = 2) + theme_bw() 
+
+svg("pcoa_edu.svg", width=3.5, height=4.3)
+plot_ordination(NYC_HANES, ord, color="EDU3CAT") + geom_point(shape=5) + stat_ellipse(type = "t", linetype = 2) + theme_bw() + theme(legend.position = "bottom") +guides(color=guide_legend(title="Education", ncol=1))
+dev.off()
+
+svg("pcoa_age.svg", width=3.5, height=4.3)
+plot_ordination(NYC_HANES, ord, color="AGEGRP3C") + geom_point(shape=1) +  stat_ellipse(type = "t", linetype = 2) + theme_bw() + theme(legend.position = "bottom") +guides(color=guide_legend(title="Age group", ncol=1))
+dev.off()
+
+```
+
+
+## Hierarchical clustering on sociodemographic variables from full dataset
+
+```{r cluster_socio, eval=FALSE, cache=TRUE}
+dist_mtrx <- as.dist(  1 - abs( cor(t(mtrx_cluster) ,  use="pairwise.complete.obs")))
+set.seed(100)
+socio_hclust <- hclust(dist_mtrx)
+plot(as.dendrogram(socio_hclust) )
+```
+
+
+
+
+## Describing the by sociodemographic clusters (currently has error)
+```{r edgeR_2clusters, results='asis', eval=FALSE}
+
+suppressPackageStartupMessages({
+  library(flexclust)
+  library(cluster)
+  library(randomForest)
+})
+
+
+# create cluster variable in full dataset
+df_cluster$full_clust = factor(pam(dist_mtrx, k=2, cluster.only = TRUE), labels=paste("cluster",1:2))
+
+
+# fit random forest model to predict the cluster
+cluster_fit <-randomForest(full_clust ~ ., data=df_cluster)
+  # first I have to remove NA factor levels in INC25KMOD & US_BORN
+    metadata$US_BORN[metadata$US_BORN == "NA"] <- NA
+    metadata$US_BORN %<>% droplevels
+    metadata$INC25KMOD[metadata$INC25KMOD == "NA"] <- NA
+    metadata$INC25KMOD %<>% droplevels
+
+# predict the cluster on the subset
+metadata$socio_cluster <-  factor(predict(cluster_fit, newdata=metadata[,clustervars], type="response"))
+
+# and re-append the sample data
+sample_data(NYC_HANES) <- metadata
+
+# create a table of sociodemographic variables by cluster in the full dataset
+tbl3 <- prettytable_autoindent(vars=clustervars,
+                          data=df_cluster, nonnormal = "SPAGE", strata="full_clust")
+
+knitr::knit_print(knitr::kable(tbl3))
+```
+
+
+## Testing associations of each sociodemographic variable with 2 OTU clusters
+
+```{r chisq_clusters, eval=FALSE, results='asis'}
+
+metadata$bray_cluster <- cluster::pam(dist_bray, k=2, cluster.only = T)
+
+tbl2 <- prettytable_autoindent(vars=variablesToLook, data=metadata, 
+                          strata="bray_cluster", nspaces = 2,
+                          nonnormal = c("SPAGE","DMQ_7YEAR"))
+knitr::knit_print(knitr::kable(tbl2, align = "lrrrr"))
+```
+
+## Association of sociodemographic clusters with OTU clusters
+
+```{r cluster_w_cluster, results='asis', warning=FALSE, eval=FALSE}
+or <- epitools::oddsratio(metadata$bray_cluster, metadata$socio_cluster)
+
+knitr::knit_print(knitr::kable(or$data))
+knitr::knit_print(knitr::kable(or$measure))
+knitr::knit_print(knitr::kable(or$p.value))
+```
+
+## Clustering of variables (rather than samples)
+```{r clustering_variables}
+
+source("pca_utils.R")
+library(ClustOfVar)
+clustervars <- c('AGEGRP5C','GENDER','EDU4CAT','INC3C','DMQ_2',
+                 'RACE','US_BORN','OHQ_3','OHQ_5_3CAT')
+clusterlabs <- c('Age group (5c)',"Gender","Education (4c)","Income (3c)",
+                 "Marital Status","Race/ethnicity","Foreign- vs. US-born",
+                 "Gum disease","Mouthwash use")
+df_cluster <- nychanes_full[,clustervars]
+mtrx_cramersV  <- 1 - abs(cramersV_matrix(data=df_cluster))
+
+
+tree <- hclustvar(X.quali = df_cluster)
+plot(tree)
+#stab <- stability(tree)
+#boxplot(stab$matCR)
+p6 <- cutreevar(tree, k = 6)
+
+df_cluster <- cbind(df_cluster, p6$scores)
+
+unique_scores <- df_cluster[!duplicated(df_cluster[,clustervars]),]
+metadata_cluster <- left_join(sample_data(NYC_HANES)[,clustervars], unique_scores, by=clustervars )
+
+
+plot_alpha_by(NYC_HANES, metadata = metadata_cluster[,grep("cluster",names(metadata_cluster))] )
+
+
+```
+
+
+
+# Appendix 2: Variables in NYC HANES codebook but missing from dataset (missing HHN (household size))
+
+```{r missing_variables, eval=FALSE, echo=TRUE, message=FALSE, warning=FALSE}
+varlist <- gdata::read.xls("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYC-HANES-2013-14_Variable-List_V2_0916.xlsx", pattern = "SAMP")$KEY
+
+varlist[!varlist %in% names(metadata)]
+```
+
+
+
+

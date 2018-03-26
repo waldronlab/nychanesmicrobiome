@@ -1,0 +1,119 @@
+---
+title: "NYC-HANES"
+author: "Francesco Beghini"
+date: "November 21, 2016"
+output: 
+  html_document: 
+    fig_caption: yes
+theme: cosmo
+---
+```{bash generate tree}
+
+f="/CM/projects/fbeghini_oralMicrobiome/NYDH_smoking_pilot_fastq/oligotyping/Neisseria_otus-sc29-s10-a8.0-A0-M100/ /CM/projects/fbeghini_oralMicrobiome/NYDH_smoking_pilot_fastq/oligotyping/Prevotella_otus-sc62-s10-a10.0-A0-M800/ /CM/projects/fbeghini_oralMicrobiome/NYDH_smoking_pilot_fastq/oligotyping/streptococcus_otus-sc80-s10-a5.0-A0-M1000/"
+
+#for x in $f; do
+#muscle -in $x/OLIGOS.fasta -out $x/OLIGOS.aln
+#FastTreeMP-2.1.9-SSE3 -nt < $x/OLIGOS.aln > $x/OLIGOS.tre
+#done
+```
+
+```{r Import oligotyping output}
+library("ape")
+library("phyloseq")
+library("dplyr")
+library("reshape2")
+library("vegan")
+source("utils.R")
+NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
+
+f <- c("Neisseria","Prevotella","Streptococcus")
+
+phylo.otut <- list()
+
+for (x in f) {
+  otumap <- read.table(paste("../input/", x,"_MATRIX-COUNT.txt", sep = ""),  header = T,row.names = 1) %>% t
+  taxmat <- matrix(sample(letters, 7*nrow(otumap), replace = TRUE), nrow = nrow(otumap), ncol = 7)
+  rownames(taxmat) <- rownames(otumap)
+  colnames(taxmat) <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+  # otu.tree <- read.tree(paste("../input/", x, "_OLIGOS.tre", sep = ""))
+  
+  phylo.otut[x] <- phyloseq(otu_table(otumap, taxa_are_rows = TRUE), tax_table(taxmat),sample_data(NYC_HANES)[colnames(otumap),]) 
+  #%>% transform_sample_counts(function(x) x/sum(x))
+}
+```
+
+```{r cache=TRUE}
+annot <- data.frame(Smoking_status = sample_data(NYC_HANES)$SMOKER)
+rownames(annot) <- sample_names(NYC_HANES)
+
+pheatmap::pheatmap(otu_table(phylo.otut[[1]] %>% transform_sample_counts(function(x) x/sum(x)))[,rownames(annot[!annot$Smoking_status %in% c("Former smoker"),,FALSE])],
+                   annotation_col = annot,
+                   show_rownames = F,
+                   main = "Streptococcus oligotyping no former")
+
+pheatmap::pheatmap(otu_table(phylo.otut[[3]] %>% transform_sample_counts(function(x) x/sum(x))),
+                   annotation_col = annot,
+                   show_rownames = F, 
+                   main = "Streptococcus oligotyping")
+
+pheatmap::pheatmap(otu_table(phylo.otut[[2]] %>% transform_sample_counts(function(x) x/sum(x))),
+                   annotation_col = annot,
+                   show_rownames = F, 
+                   main = "Prevotella oligotyping")
+
+pheatmap::pheatmap(otu_table(phylo.otut[[1]] %>% transform_sample_counts(function(x) x/sum(x))),
+                   annotation_col = annot,
+                   show_rownames = F, 
+                   main = "Neisseria oligotyping")
+```
+
+```{r Alpha diversity}
+alphadiv <- estimate_richness(phylo.otut[[2]], measures = c("Observed","Chao1","Shannon"))[,-3]
+alphadiv <- cbind(alphadiv, sample_data(NYC_HANES)$smokingstatus)
+alphadiv <- cbind(alphadiv, sample_data(NYC_HANES)$COTININE)
+colnames(alphadiv)[4] <- "smokingstatus"
+colnames(alphadiv)[5] <- "COTININE"
+alphadiv.melted <- melt(alphadiv, id.vars = "smokingstatus")
+
+ggplot(alphadiv.melted,aes(smokingstatus,value)) +
+  geom_boxplot(color="white", fill = "black")+
+  facet_grid(variable ~., scales = "free") +
+  # scale_x_discrete(labels = c("Never\nsmoker\nn=61","Current\nsmoker\nn=70","Former\nsmoker\nn=28"))+
+  theme_bw()
+```
+
+```{r Beta diversity, cache=TRUE}
+# detach("package:DESeq2",unload = TRUE)
+
+ords <- list()
+permanova.res.oligos <- data.frame()
+
+for (k in f) {
+  subsamples <- subset_samples(phylo.otut[[k]], smokingstatus %in% c("Cigarette","Never smoker"))
+  distwu <- phyloseq::distance(subsamples, "bray")
+  metadata <- sample_data(subsamples)  %>% data.frame
+  
+  ordwu <-  ordinate(subsamples, method = "MDS", distance = distwu)
+  
+  permanova <- adonis(distwu ~ smokingstatus, metadata, parallel = 5)
+  permanova.res.oligos %<>% bind_rows(data.frame(oligotype = k , r2=permanova$aov.tab[1,5],pvalue=permanova$aov.tab[1,6])) %>% arrange(pvalue)
+  x <- plot_ordination(phylo.otut[[k]], ordwu, justDF = TRUE) %>% data.frame
+  x$samplename <- rownames(x)
+  status <- sample_data(phylo.otut[[k]])[,"SMOKER3CAT",FALSE] %>% data.frame
+  status$samplename <- rownames(status)
+  x <- base:::merge(x,status,by="samplename")
+  ords[[k]] <- x
+}
+
+ggplot(ords[[1]][ords[[1]]$smokingstatus %in% c("Cigarette","Never smoker"),]) +
+  geom_point(aes(Axis.1,Axis.2, color=)) +
+  ggtitle("Neisseria")
+
+ggplot(ords[[2]][ords[[2]]$smokingstatus %in% c("Cigarette","Never smoker"),]) +
+  geom_point(aes(Axis.1,Axis.2, color=smokingstatus)) +
+  ggtitle("Prevotella")
+
+ggplot(ords[[3]][ords[[3]]$smokingstatus %in% c("Cigarette","Never smoker"),]) +
+  geom_point(aes(Axis.1,Axis.2, color=smokingstatus)) +
+  ggtitle("Streptococcus")
+```

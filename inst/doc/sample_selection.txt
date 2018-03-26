@@ -1,0 +1,13 @@
+Here is how we selected the sample (n=297):
+
+All of these were people who consented to having their mouthwash specimens stored for future esearch (MICRO_TEST=1).
+
+Groups 1, 2 and 3, self-reported hookah, cigar/cigarillo and/or e-cigarette in last 5 days regardless of whether they have serum cotinine data available or were cigarette smokers (n=79).
+
+Group 4 =- Current cigarette smokers - defined as reporting lifetime smoking of 100+ cigarettes, reporting smoking a cigarette in the last 5 days, and not reporting any other nicotine product in last 5 days.  We selected the 90 with the highest cotinine levels from this group.
+
+Group 5 = Former smokers with no secondhand exposure  defined as reporting lifetime smoking of 100+ cigarettes, but currently not smoking at all, and not reporting any nicotine product in last 5 days and serum cotinine <0.05 ng/mL. (We randomly selected n=45).
+
+Group 6 = Former or never smokers with secondhand exposure defined as either reporting lifetime 100+ cigarettes but not currently smoking at all (former), or reporting lifetime less than 100 cigarettes (never), and not reporting any nicotine product in last 5 days and serum cotinine >1 and <14 ng/mL. (n=38)
+
+Group 7 = Never smokers with no secondhand exposure defined as reporting lifetime smoking of <100 cigarettes and not using any nicotine product in last 5 days and cotinine <0.05 ng/mL (We randomly selected n=45).
