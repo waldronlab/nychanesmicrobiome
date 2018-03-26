@@ -674,15 +674,45 @@ fit <- limma::lmFit(my.gsva, my.gsva$COTININE) %>% eBayes()
 topTable(fit)
 ```
 
+## GSEA hookah smokers vs never smokers
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
+NYC_HANES.hookah <-NYC_HANES %>% subset_samples(., smokingstatus %in% c("Never smoker") | HOOKAH_PIPE == 1)
+NYC_HANES.hookah %<>% prune_taxa((NYC_HANES.hookah %>% otu_table  %>% rowSums())>30,.)
+meta <- sample_data(NYC_HANES.hookah)
+pdata <- new("AnnotatedDataFrame",meta)
+group = meta$smokingstatus
+design = model.matrix(~ smokingstatus, data=data.frame(meta))
+
+d <- edgeR::DGEList(otu_table(NYC_HANES.hookah), group = group)
+d <- edgeR::calcNormFactors(d)
+class(d$counts) <- "matrix"
+otu_table.voom <- limma::voom(d, design = design, plot = FALSE)
+
+eset <- ExpressionSet(assayData = otu_table.voom$E, phenoData = pdata)
+eset$GROUP <- ifelse(eset$smokingstatus == "Alternative smoker",0,1)
+de.eset <- EnrichmentBrowser::de.ana(eset)
+
+biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
+ds <- tax_table(NYC_HANES.hookah) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.hookah)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
+sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
+
+EnrichmentBrowser::config.ebrowser("OUTDIR.DEFAULT","./results")
+gsea.res <- EnrichmentBrowser::sbea("gsea", de.eset, my.gs)
+EnrichmentBrowser::gs.ranking(gsea.res, signif.only=FALSE)
+```
+
 ## GSEA e-cigarette smokers vs never smokers
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.ecig <-NYC_HANES %>% subset_samples(., smokingstatus %in% c("Never smoker") | E_CIGARETTES == 1)
+NYC_HANES.ecig <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Never smoker") | E_CIGARETTES == 1)
 NYC_HANES.ecig %<>% prune_taxa((NYC_HANES.ecig %>% otu_table  %>% rowSums())>30,.)
 meta <- sample_data(NYC_HANES.ecig)
 pdata <- new("AnnotatedDataFrame",meta)
 
-group = sample_data(NYC_HANES.ecig)$smokingstatus
-design = model.matrix(~smokingstatus, data=data.frame(sample_data(NYC_HANES.ecig)))
+group = meta$smokingstatus
+design = model.matrix(~ smokingstatus, data = data.frame(sample_data(NYC_HANES.ecig)))
 
 d <- edgeR::DGEList(otu_table(NYC_HANES.ecig), group = sample_data(NYC_HANES.ecig)$smokingstatus)
 d <- edgeR::calcNormFactors(d)
@@ -695,37 +725,6 @@ de.eset <- EnrichmentBrowser::de.ana(eset)
 
 biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
 ds <- tax_table(NYC_HANES.ecig) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.ecig)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
-
-EnrichmentBrowser::config.ebrowser("OUTDIR.DEFAULT","./results")
-gsea.res <- EnrichmentBrowser::sbea("gsea", de.eset, my.gs)
-EnrichmentBrowser::gs.ranking(gsea.res, signif.only=FALSE)
-```
-
-## GSEA hookah smokers vs never smokers
-```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.hookah <-NYC_HANES %>% subset_samples(., smokingstatus %in% c("Never smoker") | HOOKAH_PIPE == 1)
-NYC_HANES.hookah %<>% prune_taxa((NYC_HANES.hookah %>% otu_table  %>% rowSums())>30,.)
-meta <- sample_data(NYC_HANES.hookah)
-pdata <- new("AnnotatedDataFrame",meta)
-
-group = sample_data(NYC_HANES.hookah)$smokingstatus
-design = model.matrix(~smokingstatus, data=data.frame(sample_data(NYC_HANES.hookah)))
-
-d <- edgeR::DGEList(otu_table(NYC_HANES.hookah), group = sample_data(NYC_HANES.hookah)$smokingstatus)
-d <- edgeR::calcNormFactors(d)
-class(d$counts) <- "matrix"
-otu_table.voom <- limma::voom(d, design = design, plot = FALSE)
-
-eset <- ExpressionSet(assayData = otu_table.voom$E, phenoData = pdata)
-eset$GROUP <- ifelse(eset$smokingstatus == "Alternative smoker",0,1)
-de.eset <- EnrichmentBrowser::de.ana(eset)
-
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.hookah) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.hookah)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
 sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
 sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
 sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
