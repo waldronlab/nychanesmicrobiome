@@ -20,16 +20,16 @@ loadQiimeData <- function(){
                          , phylo)
   
   metadata <- sas7bdat::read.sas7bdat(system.file("extdata","public_v2_010518.sas7bdat", package="nychanesmicrobiome", mustWork = TRUE))
-  link <- sas7bdat::read.sas7bdat(system.file("extdata","linked_for_cuny_031618.sas7bdat", package="nychanesmicrobiome", mustWork = TRUE))
   
+  link <- read.delim(system.file("extdata","original_map.tsv", package="nychanesmicrobiome", mustWork = TRUE))
   
   new_metadata <- dplyr::left_join(link, metadata, by='KEY')
   
   sample_names(phylo) <- stringr::str_replace_all(sample_names(phylo), 'c|R', '')
   
   
-  f_sample_selection <- system.file("extdata", "smokingsampleselection.csv", package="nychanesmicrobiome", mustWork = TRUE)
-  sample_selection <- read.csv(f_sample_selection)
+  f_sample_selection <- system.file("extdata", "smokingsampleselection.tsv", package="nychanesmicrobiome", mustWork = TRUE)
+  sample_selection <- read.delim(f_sample_selection)
   
   altsmokers <- sample_selection[sample_selection$final.altsmokers,'key']
   never <- sample_selection[sample_selection$final.nevers,'key']
