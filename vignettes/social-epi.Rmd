@@ -39,16 +39,17 @@ suppressPackageStartupMessages({
 
 
 ```{r load_data}
+#full NYC-HANES2 dataset 
+nychanes_sas <- sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYCHANES_2013_14_V2_09212016.sas7bdat")
+nychanes_full <- annotateFullDataset(nychanes_sas)
+
 #pilot microbiome data
 suppressPackageStartupMessages({
-  NYC_HANES_raw <- loadQiimeData()
+  NYC_HANES_raw <- loadQiimeData(nychanes_sas)
   NYC_HANES <- annotateFactors(NYC_HANES_raw)
 })
 metadata <- data.frame(sample_data(NYC_HANES))
 
-#full NYC-HANES2 dataset 
-nychanes_sas <- sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYCHANES_2013_14_V2_09212016.sas7bdat")
-nychanes_full <- annotateFullDataset(nychanes_sas)
 ```
 
 # Descriptives
@@ -186,7 +187,7 @@ phyla_colors <- c(rbind(get_phyla_colors(v=.7,s=.5)[c(2,4,6,8)],
 
 
 g <- plot_abundance(NYC_HANES, PALETTE = phyla_colors, top_n = 8, prop = "total") +
-  labs(x = "└──── 296 Samples ─────┘", y = "", title = "") + 
+  labs(x = paste0("└────── ", length(sample_names(NYC_HANES)), " Samples ───────┘"), y = "", title = "") + 
   scale_x_continuous(labels = NULL) + 
   scale_y_continuous(labels = seq(0,100,25))
 
