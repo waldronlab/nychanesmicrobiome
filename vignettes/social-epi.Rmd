@@ -665,3 +665,24 @@ In a diverse population-based sample, we found that a large number of bacterial 
 sessionInfo()
 ```
 
+```{r check_n_otus_smoking}
+alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
+NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
+sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
+
+#edgeR
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = F, method = "BH")
+da.univ <- da.univ[sort(da.univ %>% rownames),]
+
+#DESeq2
+threshold <- 0.05
+dds <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus), parallel = TRUE)
+
+## here "Current smoker" is the numerator, "Never smoker" is the denominator in fold-change calculation
+res <- DESeq2::results(dds, contrast = c("smokingstatus","Cigarette","Never smoker"))
+res.filtered <- res[!is.na(res$padj),]
+res.filtered <- res.filtered[res.filtered$padj < threshold,]
+
+```
+
+When I run edgeR comparing current cigarette vs. never smokers, I get `r sum(da.univ$table$FDR < 0.05)` significant OTUs at FDR < 0.05, and when I run DESeq2, I get `r nrow(res.filtered)`. 
