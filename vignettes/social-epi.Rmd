@@ -39,16 +39,17 @@ suppressPackageStartupMessages({
 
 
 ```{r load_data}
+#full NYC-HANES2 dataset 
+nychanes_sas <- sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYCHANES_2013_14_V2_09212016.sas7bdat")
+nychanes_full <- annotateFullDataset(nychanes_sas)
+
 #pilot microbiome data
 suppressPackageStartupMessages({
-  NYC_HANES_raw <- loadQiimeData()
+  NYC_HANES_raw <- loadQiimeData(nychanes_sas)
   NYC_HANES <- annotateFactors(NYC_HANES_raw)
 })
 metadata <- data.frame(sample_data(NYC_HANES))
 
-#full NYC-HANES2 dataset 
-nychanes_sas <- sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYCHANES_2013_14_V2_09212016.sas7bdat")
-nychanes_full <- annotateFullDataset(nychanes_sas)
 ```
 
 # Descriptives
@@ -186,7 +187,7 @@ phyla_colors <- c(rbind(get_phyla_colors(v=.7,s=.5)[c(2,4,6,8)],
 
 
 g <- plot_abundance(NYC_HANES, PALETTE = phyla_colors, top_n = 8, prop = "total") +
-  labs(x = "└──── 296 Samples ─────┘", y = "", title = "") + 
+  labs(x = paste0("└────── ", length(sample_names(NYC_HANES)), " Samples ───────┘"), y = "", title = "") + 
   scale_x_continuous(labels = NULL) + 
   scale_y_continuous(labels = seq(0,100,25))
 
@@ -234,13 +235,19 @@ plot_alpha_by(NYC_HANES, metadata=df_alpha[-8], notch=FALSE)
 ```{r otu_occurances_varlevels, cache=TRUE, fig.height=5.3, fig.width=11}
 
 model_vars = c('GENDER','AGEGRP3C','EDU3CAT','INC3C','DMQ_2','RACE','US_BORN')
-model_varlabs = c('Gender (3)','Age (56)','Education (19)','Family income (21)','Marital status (19)','Race/ethnicity (27)','US- vs. foreign-born (7)')
+model_varlabs = c('Gender','Age','Education','Family income','Marital status','Race/ethnicity','US- vs. foreign-born')
 
 #drop empty levels
 sample_data(NYC_HANES) <- droplevels(data.frame(sample_data(NYC_HANES)))
 
 #Get a dataframe of toptags from all models
 df_tile <- get_all_edgeR_models(model_vars, model_varlabs, to.data.frame=TRUE)
+
+#label variables with the number of unique OTUs significant
+df_tile$variable <- paste0(as.character(df_tile$variable), " (",
+                           sapply(df_tile$variable, 
+                                  function(i) sum(df_tile$variable==i)),
+                           ")") 
 
 #Attach genus information
 df_tile %<>% left_join(data.frame(OTU=rownames(tax_table(NYC_HANES)), Genus = tax_table(NYC_HANES)[,"Genus"]))
@@ -469,7 +476,7 @@ list_permanovas <- list(
 )
 
 #SumOfSqs <- unlist(lapply(list_permanovas, function(i) i[["SumOfSqs"]][1]))
-r_squared <- sapply(list_permanovas, function(i) 1 - (i$SumOfSqs[2]/sum(i$SumOfSqs)))
+r_squared <- sapply(list_permanovas, function(i) i$SumOfSqs[1]/sum(i$SumOfSqs[1:2]))
 perm_results <- data.frame(
   r_squared,
   F = unlist(lapply(list_permanovas, function(i) i[["F"]][1])),
@@ -512,6 +519,7 @@ pb
 
 ```{r values_for_abstract}
 # number of significant OTUs in total and for each sociodemographic variable
+df_tile$variable <- gsub(" \\(|[1-9]|)", "", df_tile$variable)
 n_sig <- structure(
   c(length(unique(df_tile$OTU)),
     table(df_tile$variable)[model_varlabs]),
@@ -524,16 +532,17 @@ df_tile_conf <- get_all_edgeR_models(vars = conf_vars, varlabels=conf_vars,
 n_sig <- c(n_sig, table(df_tile_conf$variable))
 
 #replace any single-digit numbers with words
-n_sig[n_sig < 10] <- qdap::replace_number(n_sig[n_sig < 10])
+numbers=c("one","two","three","four","five","six","seven","eight","nine","ten")
+n_sig[n_sig < 10] <-numbers[n_sig[n_sig < 10]]
 
 ```
 
 *Background*<br>
 Variations in the oral microbiome are potentially implicated in health inequalities, but existing studies of the oral microbiome have minimal sociodemographic diversity.  We describe sociodemographic variation of the oral microbiome in a diverse sample.<br>
 *Methods*<br>
-In a subsample (n=`r nrow(metadata)`) of the 2013-14 population-based New York City Health and Nutrition Examination Study (NYC-HANES).  Mouthwash samples were processed using using 16S v4 rRNA amplicon sequencing. We examined differential abundance of 216 operational taxonomic units (OTUs), in addition to alpha and beta diversity by sociodemographic variables including age, gender, income, education, nativity, and race/ethnicity.  <br>
+In a subsample (n=`r nrow(metadata)`) of the 2013-14 population-based New York City Health and Nutrition Examination Study (NYC-HANES).  Mouthwash samples were processed using using 16S v4 rRNA amplicon sequencing. We examined differential abundance of 216 operational taxonomic units (OTUs), in addition to alpha and beta diversity by sociodemographic variables including age, sex, income, education, nativity, and race/ethnicity.  <br>
 *Results*<br>
-`r n_sig["ALL"]` OTUs were differentially abundant by any sociodemographic variable (false discovery rate < 0.01), including `r n_sig["RACE"]` by race/ethnicity, `r n_sig["INC3C"]` by family income, `r n_sig["EDU3CAT"]` by education, `r n_sig["GENDER"]` by gender. We found  `r n_sig["smokingstatus"]` by smoking status,  `r n_sig["DBQ_10_3CAT"]` by sugar-sweetened beverage consumption,  `r n_sig["OHQ_5_3CAT"]` by mouthwash use. Genera differing for multiple sociodemographic characteristics included **Lactobacillus, Prevotella, Porphyromonas, Fusobacterium**.<br>
+`r n_sig["ALL"]` OTUs were differentially abundant by any sociodemographic variable (false discovery rate < 0.01), including `r n_sig["RACE"]` by race/ethnicity, `r n_sig["INC3C"]` by family income, `r n_sig["EDU3CAT"]` by education, `r n_sig["GENDER"]` by sex. We found  `r n_sig["smokingstatus"]` by smoking status,  `r n_sig["DBQ_10_3CAT"]` by sugar-sweetened beverage consumption,  `r n_sig["OHQ_5_3CAT"]` by mouthwash use. Genera differing for multiple sociodemographic characteristics included **Lactobacillus, Prevotella, Porphyromonas, Fusobacterium**.<br>
 *Discussion*<br>
 We identified variations in the oral microbiome consistent with health inequalities, with more taxa differing by race/ethnicity than sugar-sweetened beverage consumption, and more by SES variables than mouthwash use. Further investigation is warranted into possible mediating effects of the oral microbiome in social disparities in diabetes, inflammation, oral health, and preterm birth. <br>
 
@@ -569,7 +578,7 @@ p_alp["Place"] <- paste0(substr(p_alp["Place"],1,nchar(p_alp["Place"])-1),
 ```
 
 
-Table 1 shows sociodemographic variation with respect to age (median [range]: `r age`), gender (`r female`% female), race/ethnicity (`r white`% non-Hispanic White, `r black`% non-Hispanic Black, `r hispa`% Hispanic), annual family income (`r inc1`% less than \$30K, `r inc2`% \$60k or more), and educational achievement (`r edu1`% less than high school diploma, `r edu2`% college degree or greater). Figure 1 displays absolute values of Cramer’s V, a correlation coefficient for categorical variables, on all pairwise combinations of sociodemographic variables, indicating minor collinearity (all V<.35). <br>
+The initial subsample included 297 participants; after removing samples with less than 1000 reads, there were `r nrow(sample_data(NYC_HANES))` participants remaining for analysis.  Table 1 shows sociodemographic variation in the final analytic sample with respect to age (median [range]: `r age`), gender (`r female`% female), race/ethnicity (`r white`% non-Hispanic White, `r black`% non-Hispanic Black, `r hispa`% Hispanic), annual family income (`r inc1`% less than \$30K, `r inc2`% \$60k or more), and educational achievement (`r edu1`% less than high school diploma, `r edu2`% college degree or greater). Figure 1 displays absolute values of Cramer’s V, a correlation coefficient for categorical variables, on all pairwise combinations of sociodemographic variables, indicating minor collinearity (all V<.35). <br>
 **Relative Abundance and Alpha Diversity**<br>
 Oral microbiomes were characterized at the phylum level by a gradient between Firmicutes and Bacteroides abundance, with overall dominance by Firmicutes (mean=52±10%).  Streptococcus was the most abundant genus (36±10%) followed by Prevotella (17±8%). (Figure 2).
 The overall mean chao1 was 462±118, with no differences by age group `r p_alp["Age"]`, gender `r p_alp["Gender"]`, educational achievement `r p_alp["Educational"]`, annual family income `r p_alp["Family"]`, marital status `r p_alp["Marital"]`, race/ethnicity `r p_alp["Race/ethnicity"]`, or nativity `r p_alp["Place"]`. 
@@ -628,11 +637,23 @@ Analyzing oligotypes of Neisseria, Prevotella, and Streptococcus revealed associ
 Oligotype associations within Neisseria for marital status, race/ethnicity, and nativity are each for a mutually exclusive set of taxa, and associations with gender in Neisseria, Prevotella, and Streptococcus are all in separate taxa from the associations with other sociodemographic variables. Age group and education had unidirectional associations in OTU analysis in Streptococcus but bidirectional differential abundance in oligotypes. In Prevotella, race/ethnicity had unidirectional associations in OTU analysis but bidirectional associations in oligotypes.<br>
 **Beta Diversity and Clustering**<br>
 ```{r}
+bet <- function(variable) {
+  paste0("(p=",
+         round(perm_results["Education (4 cat)","p_value"], 3),
+         " $r^2$=", 
+         round(perm_results["Education (4 cat)","r_squared"],3),
+         ")")
+}
+
+
+
+us_p<- round(perm_results["US-born","p_value"], 3)
+us_r2 <- round(perm_results["US-born","r_squared"],3)
 age_p <- round(perm_results["Age (5 cat)","p_value"], 3)
 age_r2 <- round(perm_results["Age (5 cat)","r_squared"],3)
 ```
 
-Figure 6 illustrates between-versus within-group weighted UniFrac distances by each sociodemographic variable. Only age group (p=`r age_p`,  $r^2$=`r age_r2`) was associated with beta diversity, with no other variables showing greater between- than within-group variation. Plots of the first two principal coordinates based on weighted UniFrac distances showed little patterning by any variable (not shown).  Clustering scores were sensitive to the distance metric used, with Bray-Curtis indicating moderate support for 2 clusters (PS=0.86), and all other measures providing little support for clustering. <br>
+Figure 6 illustrates between-versus within-group weighted UniFrac distances by each sociodemographic variable. We observed overall shifts in composition by age group `r bet("Age (5 cat)")`, education `r bet("Education (4 cat)")`, and nativity `r bet("US-born")`, with no other variables showing greater between- than within-group variation. Plots of the first two principal coordinates based on weighted UniFrac distances showed little patterning by any variable (not shown).  Clustering scores were sensitive to the distance metric used, with Bray-Curtis indicating moderate support for 2 clusters (PS=0.86), and all other measures providing little support for clustering. <br>
 
 ## Discussion
 
@@ -644,3 +665,24 @@ In a diverse population-based sample, we found that a large number of bacterial 
 sessionInfo()
 ```
 
+```{r check_n_otus_smoking}
+alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
+NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
+sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
+
+#edgeR
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = F, method = "BH")
+da.univ <- da.univ[sort(da.univ %>% rownames),]
+
+#DESeq2
+threshold <- 0.05
+dds <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus), parallel = TRUE)
+
+## here "Current smoker" is the numerator, "Never smoker" is the denominator in fold-change calculation
+res <- DESeq2::results(dds, contrast = c("smokingstatus","Cigarette","Never smoker"))
+res.filtered <- res[!is.na(res$padj),]
+res.filtered <- res.filtered[res.filtered$padj < threshold,]
+
+```
+
+When I run edgeR comparing current cigarette vs. never smokers, I get `r sum(da.univ$table$FDR < 0.05)` significant OTUs at FDR < 0.05, and when I run DESeq2, I get `r nrow(res.filtered)`. 
