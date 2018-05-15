@@ -85,7 +85,7 @@ plot_edgeR <- function(formla, ttle=NULL, varname=NULL,
           legend.title = ggplot2::element_text(size=14),
           title = ggplot2::element_text(size=15)) +
     ggplot2::scale_y_discrete(position="right") +
-    ggplot2::labs(x="Log10-fold change") +
+    ggplot2::labs(x="Log2-fold change") +
     ggplot2::ggtitle(ttle)
   #add the colors set permanently to phyla (for multiple plots)
   if(color=="Phylum") p <- p + ggplot2::scale_color_manual(values=phyla_colors)
