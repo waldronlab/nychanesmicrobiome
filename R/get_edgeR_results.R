@@ -118,7 +118,7 @@ edger_list_to_data.frame <- function(list_models) {
 
 #' @export
 #' @rdname get_edgeR_results
-get_all_edgeR_models <-  function(vars, varlabels, adjusted_for, to.data.frame=TRUE, ...) {
+get_all_edgeR_models <-  function(vars, varlabels=vars, adjusted_for, to.data.frame=TRUE, ...) {
   as.form <- function(vars) as.formula(paste0("~", paste(vars, collapse="+")))
   
   if(missing(adjusted_for)) {
