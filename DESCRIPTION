@@ -2,7 +2,9 @@ Package: nychanesmicrobiome
 Type: Package
 Title: What the Package Does (Title Case)
 Version: 0.1.0
-Author: Who wrote it
+Author: Audrey Renson <audrey.o.renson@gmail.com>
+        Francesco Beghini <francesco.beghini@unitn.it>
+        Levi Waldron <lwaldron.research@gmail.com>
 Maintainer: The package maintainer <yourself@somewhere.net>
 Description: More about what it does (maybe more than one line)
     Use four spaces when indenting paragraphs within the Description.
@@ -15,8 +17,7 @@ Depends:
   phyloseq,
   lsr,
   sas7bdat,
-  kableExtra,
-  qdap
+  kableExtra
 Imports:
   ggplot2,
   IHW,
