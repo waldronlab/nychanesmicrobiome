@@ -672,7 +672,7 @@ NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 
 #edgeR
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = F, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
 da.univ <- da.univ[sort(da.univ %>% rownames),]
 
 #DESeq2
