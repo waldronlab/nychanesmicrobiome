@@ -1,25 +1,23 @@
 ---
 title: "Tobacco exposure associated with oral microbiome anaerobiosis in the New York City Health and Nutrition Examination Study (NYC HANES) II"
-author: "Francesco Beghini"
-date: "`r Sys.Date()`"
+author:
+- name: 'Francesco Beghini'
+  affiliation: "Laboratory of Computational Metagenomics - Centre for Integrative Biology - University of Trento - Italy"
+  email: francesco.beghini@unitn.it
 output: 
   BiocStyle::html_document:
-    fig_caption: yes
+    fig_width: 6.5
     toc: yes
     toc_depth: 2
     number_sections: true
-    keep_md: true
 vignette: >
   %\VignetteIndexEntry{Tobacco exposure associated with oral microbiome anaerobiosis in the New York City Health and Nutrition Examination Study (NYC HANES) II}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::knitr}
-editor_options: 
-  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::fig_path('figures')
 suppressPackageStartupMessages({
 library(dplyr)
 library(ggplot2)
@@ -52,7 +50,7 @@ theme_transparent <- ggplot2::theme(axis.title = ggplot2::element_text(colour = 
 <!-- + Removal of these samples is done in phyloseq and not during QIIME processing -->
 
 ```{r Data loading, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
-NYC_HANES <- loadQiimeData(metadata = sas7bdat::read.sas7bdat('../inst/extdata/public_v2_010518.sas7bdat')) %>% annotateFactors(.)
+NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
 
 alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
@@ -108,7 +106,7 @@ colnames(alphadiv)[5] <- c("smokingstatus")
 alphadiv.melted <- reshape2::melt(alphadiv, id.vars = c("smokingstatus"))
 ```
 
-```{r Alpha diversity boxplots, echo=FALSE, fig.height=6, fig.width=8}
+```{r Alpha diversity boxplots, echo=FALSE, fig.width=6}
 ggplot(alphadiv.melted, aes(smokingstatus,value)) +
   geom_boxplot(aes(fill=smokingstatus))+
   facet_grid(variable ~., scales = "free", switch = 'y') +
@@ -344,7 +342,7 @@ res.tax.conf$type <- "Cigarette/Never + conf"
 
 ```
 
-```{r deseq2_multivariate, echo=FALSE,message=FALSE, warning=FALSE,  fig.width=6.5}
+```{r deseq2_multivariate, echo=FALSE,message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
   geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
   geom_point(size=3, aes(color = X2)) + 
@@ -422,7 +420,7 @@ da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 0.05, filtering =
 da.univ$table <- da.univ$table[sort(da.univ$table %>% rownames),]
 ```
 
-```{r edgeR_univ, echo=FALSE, fig.height=6, fig.width=8}
+```{r edgeR_univ, echo=FALSE, fig.width=6.5}
 da.univ$table$Genus <- as.character(da.univ$table$Genus)
 da.univ$table[c("New.CleanUp.ReferenceOTU8965","New.ReferenceOTU179"), 'Genus'] <- 'uncultured'
 da.univ$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
@@ -468,7 +466,7 @@ da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_AC
 da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
 ```
 
-```{r edgeR_multiv, echo=FALSE, fig.height=6, fig.width=7}
+```{r edgeR_multiv, echo=FALSE, fig.width=6.5}
 da.multiv$table$Genus <- as.character(da.multiv$table$Genus)
 da.multiv$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
 da.multiv$table$Genus[is.na(da.multiv$table$Genus)] <- 'unclassified'
@@ -518,7 +516,7 @@ da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
 compardat <- data.frame(univariate = da.univ$table$logFC, padj = da.univ$table$PValue, multivariate = da.multiv$table[da.univ$table %>% rownames,]$logFC)
 ```
 
-```{r edgeR_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
+```{r edgeR_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(compardat) +
   geom_abline(color="black", alpha=0.5, size=1) +
   geom_point(aes(univariate, multivariate, color=padj < 0.05), size=2) +
@@ -547,7 +545,7 @@ edger.smoker_secondhand<-edger.smoker_secondhand[edger.smoker_secondhand$pvalue<
 corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
 ```
 
-```{r edger_cotinine_univ_filter, echo=FALSE,  fig.width=6.5, message=FALSE, warning=FALSE}
+```{r edger_cotinine_univ_filter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
 ggplot(edger.smoker_secondhand) + 
   theme_bw() +
   xlab("Crude Smokers vs. Non-smokers") +
@@ -573,7 +571,7 @@ edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotini
 corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
 ```
 
-```{r edger_cotinine_univ_nofilter, echo=FALSE,  fig.width=6.5, message=FALSE, warning=FALSE}
+```{r edger_cotinine_univ_nofilter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
 ggplot(edger.smoker_secondhand) + 
   theme_bw() +
   xlab("Crude Smokers vs. Non-smokers") +
@@ -588,7 +586,7 @@ ggplot(edger.smoker_secondhand) +
 ```
 
 ### Alternative smokers vs Never smoker: univariate
-```{r edgeR_alternative, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_alternative, echo=FALSE, cache=TRUE, fig.width=6.5}
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 da.univ <- get_edgeR_results(~ smokingstatus, coef = 4, alph = 2, filtering = F, method = "BH")
 da.univ <- da.univ[sort(da.univ %>% rownames),]
@@ -596,19 +594,19 @@ plot_edgeR(~ smokingstatus, pseq = NYC_HANES, coef=4, alph = 0.05, filtering = T
 ```
 
 #### E-cigarette vs never smokers
-```{r edgeR_ecigs, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_ecigs, echo=FALSE, cache=TRUE, fig.width=6.5}
 sample_data(NYC_HANES)$E_CIGARETTES <- factor(sample_data(NYC_HANES)$E_CIGARETTES,labels = c('Yes','No',NaN))
 plot_edgeR(~ E_CIGARETTES, pseq = NYC_HANES, alph = 0.05, filtering = T, method = "BH", sortby = "Phylum") -> edger.univ
 ```
 
 #### Hookah pipe vs never smokers
-```{r edgeR_hookah, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_hookah, echo=FALSE, cache=TRUE, fig.width=6.5}
 sample_data(NYC_HANES)$HOOKAH_PIPE <- factor(sample_data(NYC_HANES)$HOOKAH_PIPE, labels = c('Yes','No',NaN))
 plot_edgeR(~ HOOKAH_PIPE, pseq = NYC_HANES, alph = 0.05, filtering = T, method = "BH", sortby = "Phylum", color = 'Phylum',invisbl = FALSE)
 ```
 
 #### Cigars and cigarillos vs never smokers
-```{r edgeR_cigars, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_cigars, echo=FALSE, cache=TRUE, fig.width=6.5}
 sample_data(NYC_HANES)$CIGARS_CIGARILLOS <- factor(sample_data(NYC_HANES)$CIGARS_CIGARILLOS,labels = c('Yes','No',NaN))
 plot_edgeR(~ CIGARS_CIGARILLOS, pseq = NYC_HANES, alph = 0.05, filtering = T, method = "BH", sortby = "Phylum", invisbl = FALSE)
 ```
@@ -672,8 +670,42 @@ my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
 EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
 gsea.res <- sbea("gsea", de.eset, my.gs)
 EnrichmentBrowser::gsRanking(gsea.res, signif.only=FALSE)
+```
+
+```{r plot heatmap enrichment, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, fig.width=6.5}
+expr = assay(de.eset)
+grp = factor(eset$GROUP, labels = c('Never smoker','Cigarette'))
+
+expr <- t(scale(t(expr)))
+expr <- expr[unlist(gsea.res$gs),]
+
+coll <- c("#B62A84", "#2AB68C")
+names(coll) <- levels(grp)
+coll <- list(Group = coll)
+df <- data.frame(Group = grp)
+ha <- ComplexHeatmap::HeatmapAnnotation(df = df, col=coll)
+
+collr <- c("#E69F00", "#56B4E9", "#009E73")
+ds %<>% tibble::column_to_rownames('OTU')
+names(collr) <- levels(ds[rownames(assay(de.eset)),'X2'])
+collr <- list(Oxygen = collr)
+dr <- data.frame(Oxygen = ds[rownames(expr),]$X2 %>% na.omit())
+harow <- ComplexHeatmap::rowAnnotation(df = dr, col = collr)
+
+h1 = ComplexHeatmap::Heatmap(expr, name = "Expression", 
+                              top_annotation = ha, 
+                              show_row_names = (nrow(expr) < 41),
+                              show_column_names = (ncol(expr) < 41),
+                              column_title = "Samples", 
+                              row_title = "OTUs",
+                              cluster_rows = TRUE
+                              # row_order = unlist(gsea.res$gs)
+                             )
+
+ComplexHeatmap::`+.AdditiveUnit`(h1, harow)
 
 ```
+
 
 #### Significative OTUs
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
