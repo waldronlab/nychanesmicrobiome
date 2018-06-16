@@ -26,6 +26,7 @@ Imports:
   statmod,
   DESeq2,
   edgeR,
+  GSVA,
   EnrichmentBrowser,
   magrittr,
   dplyr,
