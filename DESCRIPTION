@@ -13,7 +13,7 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.0.1
 Depends:
-  edgeR,
+  Biobase,
   phyloseq,
   lsr,
   sas7bdat,
@@ -22,11 +22,18 @@ Imports:
   ggplot2,
   IHW,
   dplyr,
+  epitools,
+  statmod,
+  DESeq2,
+  edgeR,
+  EnrichmentBrowser,
+  magrittr,
+  dplyr,
+  vegan,
   reshape2
 Suggests: knitr,
     rmarkdown,
-    BiocStyle,
-    epitools
+    BiocStyle
 VignetteBuilder: knitr
 Collate: 
     'abundance_plots.R'
