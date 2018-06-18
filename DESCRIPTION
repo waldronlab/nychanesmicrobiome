@@ -15,10 +15,10 @@ RoxygenNote: 6.0.1
 Depends:
   Biobase,
   phyloseq,
-  lsr,
-  sas7bdat,
-  kableExtra
+  lsr
 Imports:
+  sas7bdat,
+  kableExtra,
   ggplot2,
   IHW,
   dplyr,
