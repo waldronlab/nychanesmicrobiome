@@ -1,7 +1,7 @@
 Package: nychanesmicrobiome
 Type: Package
 Title: Analysis of the NYC-HANES Microbiome Specimens
-Version: 0.1.1
+Version: 0.1.2
 Author: Audrey Renson <audrey.o.renson@gmail.com>
         Francesco Beghini <francesco.beghini@unitn.it>
         Levi Waldron <lwaldron.research@gmail.com>

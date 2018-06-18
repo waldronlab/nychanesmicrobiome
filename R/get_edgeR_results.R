@@ -34,6 +34,7 @@ get_edgeR_results <- function(formla, pseq=NYC_HANES, method=c("BH","IHW"),
   # nMinimumHaveCount, indicating how many samples must meet the countMinimum criteria
   # If method="IHW", no filtering is performed and and filtering arguments are ignored.
 
+  library(edgeR)
 
   #create model matrix
   dsg.mtrx <- model.matrix(formla, data=data.frame(sample_data(pseq)))
