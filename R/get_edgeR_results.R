@@ -44,7 +44,7 @@ get_edgeR_results <- function(formla, pseq=NYC_HANES, method=c("BH","IHW"),
   otus <- as(otu_table(pseq), "matrix")
 
   #initialize DGEList object
-  dge <- DGEList(counts = otus)
+  dge <- edgeR::DGEList(counts = otus)
 
   #filtering: keep OTU if minimum number of samples has minimum count
   if(filtering & !method[1] == "IHW") {
