@@ -51,9 +51,9 @@ theme_transparent <- ggplot2::theme(axis.title = ggplot2::element_text(colour = 
 
 ```{r Data loading, message=FALSE, warning=FALSE, include=FALSE}
 NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
-
 alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
+sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 ```
 
 
@@ -646,12 +646,9 @@ epitools::epitab(x)
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
 NYC_HANES.sns <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Cigarette","Never smoker"))
 
-meta <- sample_data(NYC_HANES.sns)
-pdata <- new("AnnotatedDataFrame",meta)
-
 design = model.matrix(~smokingstatus, data=data.frame(sample_data(NYC_HANES.sns)))
 
-eset <- ExpressionSet(assayData = otu_table(NYC_HANES.sns), phenoData = pdata)
+eset <- ExpressionSet(assayData = otu_table(NYC_HANES.sns), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES.sns)))
 eset$GROUP <- ifelse(eset$smokingstatus == "Cigarette",1,0)
 de.eset <- deAna(eset, de.method = 'edgeR')
 otu_table.voom <- limma::voom(assay(de.eset), design = design, plot = FALSE)
@@ -824,19 +821,11 @@ fit <- limma::lmFit(my.gsva, my.gsva$COTININE) %>% eBayes()
 topTable(fit)
 ```
 
-```{r Data loading2, message=FALSE, warning=FALSE, include=FALSE}
-NYC_HANES <- loadQiimeData(metadata = sas7bdat::read.sas7bdat(system.file("extdata","public_v2_010518.sas7bdat", package="nychanesmicrobiome", mustWork = TRUE))) %>% annotateFactors(.)
-
-alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
-NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
-```
-
 <!-- There are other chunks to be knitted below here but it keeps failing... -->
 
 ## Hookah smokers vs Never smokers
 ### GSEA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 NYC_HANES.hookah <- subset_samples(NYC_HANES, ((smokingstatus %in% c("Never smoker")) | (HOOKAH_PIPE == 1)))
 meta <- sample_data(NYC_HANES.hookah)
 levels(meta$smokingstatus) <- c('Never','Alternative')
