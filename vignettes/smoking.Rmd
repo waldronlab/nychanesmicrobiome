@@ -641,6 +641,14 @@ epitools::epitab(x)
 full_eset <- ExpressionSet(assayData = otu_table(NYC_HANES), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES)))
 full_eset$CATCOTININE <- ifelse(full_eset$COTININE < 3,'low','high')
 full_annotated_ds <- tax_table(NYC_HANES) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
+
+NYC_HANES.alt <- subset_samples(NYC_HANES, smokingstatus %in% c("Never smoker", "Alternative smoker"))
+levels(sample_data(NYC_HANES.alt)$smokingstatus) <- c('Never','Alternative')
+alt_full_eset <- full_eset[,(full_eset$smokingstatus %in% c("Never smoker","Alternative smoker"))]
+alt_full_eset$smokingstatus <- droplevels(alt_full_eset$smokingstatus)
+levels(alt_full_eset$smokingstatus) <- c('Never','Alternative')
+alt_full_eset$GROUP <- ifelse(alt_full_eset$smokingstatus == "Alternative",1,0)
+
 EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
 ```
 
@@ -708,7 +716,7 @@ title(paste(otuname, tax_table(NYC_HANES.sns)[otuname,'Genus']))
 
 ### ORA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-sns_ora.res <- EnrichmentBrowser::sbea("ora", de.sns_eset, my.gs, perm=1000)
+sns_ora.res <- EnrichmentBrowser::sbea("ora", de.sns_eset, sns_my.gs, perm=1000)
 EnrichmentBrowser::gsRanking(sns_ora.res, signif.only=FALSE)
 ```
 
@@ -767,20 +775,10 @@ sns.nc_sAnae <- (sns.nc_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
 sns.nc_sFana <- (sns.nc_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
 sns.nc_my.gs <- list(aero=sns.nc_sAero, anae=sns.nc_sAnae, fana=sns.nc_sFana)
 
-sns.nc.my.gsva <- GSVA::gsva(sns.nc.eset, sns.nc.my.gs, parallel.sz = 1)
+sns.nc.my.gsva <- GSVA::gsva(sns.nc.eset, sns.nc_my.gs, parallel.sz = 1)
 
 sns.nc.fit <- limma::lmFit(sns.nc.my.gsva, sns.nc.my.gsva$COTININE) %>% eBayes()
 topTable(sns.nc.fit)
-```
-
-
-```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.alt <- subset_samples(NYC_HANES, smokingstatus %in% c("Never smoker", "Alternative smoker"))
-levels(sample_data(NYC_HANES.alt)$smokingstatus) <- c('Never','Alternative')
-alt_full_eset <- full_eset[,(full_eset$smokingstatus %in% c("Never smoker","Alternative smoker"))]
-alt_full_eset$smokingstatus <- droplevels(alt_full_eset$smokingstatus)
-alt_full_eset$GROUP <- ifelse(alt_full_eset$smokingstatus == "Alternative",1,0)
-levels(alt_full_eset$smokingstatus) <- c('Never','Alternative')
 ```
 
 ## Hookah smokers vs Never smokers
