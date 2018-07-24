@@ -79,7 +79,7 @@ get_edgeR_results <- function(formla, pseq=NYC_HANES, method=c("BH","IHW"),
   # attach taxonomy names
   if(nrow(results$table) > 0) { #if any results pass the filter
     results$table <-
-      cbind(results$table, as.matrix(tax_table(pseq)[rownames(results$table),]))
+      cbind(results$table, as(tax_table(pseq)[rownames(results$table),], 'matrix'))
   }
   results
 }
