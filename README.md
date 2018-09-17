@@ -13,7 +13,7 @@ BiocManager::install(“waldronlab/nychanesmicrobiome”)
 On some machines, the above command may not by default install all the required dependencies. If this happens to you, you can install the `nychanesmicrobiome` package and its dependencies as follows:
 
 ```
-BiocManager::install(c("nychanesmicrobiome", "phyloseq", "lsr", "sas7bdat", "kableExtra", 
+BiocManager::install(c("waldronlab/nychanesmicrobiome", "phyloseq", "lsr", "sas7bdat", "kableExtra", 
           "ggplot2", "IHW", "dplyr", "epitools", "statmod", "DESeq2", "edgeR", "GSVA", 
           "EnrichmentBrowser", "magrittr", "dplyr", "vegan", "reshape2", "BiocStyle"))
 ```
