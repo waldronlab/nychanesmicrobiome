@@ -33,7 +33,8 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(magrittr)
   library(ggplot2)
-  library(nychanesmicrobiome)
+  #library(nychanesmicrobiome)
+  devtools::load_all()
 })
 ```
 
