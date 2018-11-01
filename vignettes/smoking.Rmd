@@ -1,32 +1,24 @@
 ---
 title: "Tobacco exposure associated with oral microbiome anaerobiosis in the New York City Health and Nutrition Examination Study (NYC HANES) II"
-author: "Francesco Beghini"
-date: "`r Sys.Date()`"
+author:
+- name: 'Francesco Beghini'
+  affiliation: "Laboratory of Computational Metagenomics - Centre for Integrative Biology - University of Trento - Italy"
+  email: francesco.beghini@unitn.it
 output: 
   BiocStyle::html_document:
-    fig_caption: yes
+    fig_width: 6.5
     toc: yes
     toc_depth: 2
     number_sections: true
-    keep_md: true
 vignette: >
   %\VignetteIndexEntry{Tobacco exposure associated with oral microbiome anaerobiosis in the New York City Health and Nutrition Examination Study (NYC HANES) II}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::knitr}
-editor_options: 
-  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::fig_path('figures')
-suppressPackageStartupMessages({
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-library(magrittr)
-library(EnrichmentBrowser)
-library(nychanesmicrobiome)})
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+suppressPackageStartupMessages({library(nychanesmicrobiome)})
 
 scale_palette <- c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00")
 theme_transparent <- ggplot2::theme(axis.title = ggplot2::element_text(colour = "white"),
@@ -51,11 +43,17 @@ theme_transparent <- ggplot2::theme(axis.title = ggplot2::element_text(colour = 
 <!-- + 26 samples with <1000 reads removed, around the 5% error of PCR failure that Christine told me -->
 <!-- + Removal of these samples is done in phyloseq and not during QIIME processing -->
 
-```{r Data loading, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
-NYC_HANES <- loadQiimeData(metadata = sas7bdat::read.sas7bdat('../inst/extdata/public_v2_010518.sas7bdat')) %>% annotateFactors(.)
-
+```{r Data loading, message=FALSE, warning=FALSE, include=FALSE}
+NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
 alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
+sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
+
+NYC_HANES.alt <- subset_samples(NYC_HANES, smokingstatus %in% c("Never smoker", "Alternative smoker"))
+levels(sample_data(NYC_HANES.alt)$smokingstatus) <- c('Never','Alternative')
+
+biosis.tsv <- system.file("extdata","biosis.tsv", package="nychanesmicrobiome", mustWork = TRUE)
+biosis <- read.csv(biosis.tsv,header = TRUE, sep = '\t')
 ```
 
 
@@ -68,10 +66,10 @@ factorVars <- c("AGEGRP5C", "RACE","EDU4CAT","DBTS_NEW","SR_ACTIVE","INC25KMOD",
 table1 <- tableone::CreateTableOne(vars = variablesToLook,
                                    data = metadata, 
                                    factorVars = factorVars, 
-                                   includeNA = T,
-                                   test = T)
+                                   includeNA = TRUE,
+                                   test = TRUE)
 
-alternative_habits <-metadata[metadata$smokingstatus == 'Alternative smoker',c('E_CIGARETTES','HOOKAH_PIPE','CIGARS_CIGARILLOS')] %>% mutate_all(funs(as.numeric)) %>% colSums(na.rm = T)
+alternative_habits <-metadata[metadata$smokingstatus == 'Alternative smoker',c('E_CIGARETTES','HOOKAH_PIPE','CIGARS_CIGARILLOS')] %>% dplyr::mutate_all(dplyr::funs(as.numeric)) %>% colSums(na.rm = TRUE)
 
 table1_data <- formatMetadata(NYC_HANES)
 
@@ -80,7 +78,7 @@ table1 <- prettytable_autoindent(vars = names(table1_data),data = table1_data,
 knitr::kable(table1, format="markdown")
 ```
 
-```{r Build taxonomy objects, cache=TRUE, include=FALSE}
+```{r Build taxonomy objects, include=FALSE}
 NYC_HANES.genus <- tax_glom(NYC_HANES,taxrank = "Genus")
 NYC_HANES.genus.relab <- transform_sample_counts(NYC_HANES.genus, function(x) x/sum(x))
 NYC_HANES.relab <- transform_sample_counts(NYC_HANES, function(x) x/sum(x))
@@ -100,7 +98,7 @@ plot(plot_abundance(NYC_HANES, top_n = 8, prop="total",taxrank = "Genus") + labs
 ```
 
 # Alpha diversity
-```{r Alpha diversity calculation, cache=TRUE, include=FALSE}
+```{r Alpha diversity calculation, include=FALSE}
 alphadiv <- estimate_richness(NYC_HANES, measures = c("Observed","Chao1","Shannon", "Simpson"))[,-3]
 alphadiv <- cbind(alphadiv, sample_data(NYC_HANES)$smokingstatus)
 colnames(alphadiv)[5] <- c("smokingstatus")
@@ -108,7 +106,7 @@ colnames(alphadiv)[5] <- c("smokingstatus")
 alphadiv.melted <- reshape2::melt(alphadiv, id.vars = c("smokingstatus"))
 ```
 
-```{r Alpha diversity boxplots, echo=FALSE, fig.height=6, fig.width=8}
+```{r Alpha diversity boxplots, echo=FALSE, fig.width=6}
 ggplot(alphadiv.melted, aes(smokingstatus,value)) +
   geom_boxplot(aes(fill=smokingstatus))+
   facet_grid(variable ~., scales = "free", switch = 'y') +
@@ -139,11 +137,11 @@ summary(aovSMOKINGSTATUS)
 ```
 
 # Beta Diversity
-```{r Calculate distances, warning=FALSE, cache=TRUE, include=FALSE}
+```{r Calculate distances, warning=FALSE, include=FALSE}
 distwu <- phyloseq::distance(NYC_HANES, "wunifrac")
 ordwu <-  ordinate(NYC_HANES, method = "MDS", distance = distwu, weighted = TRUE)
 
-smoker.wu.data <- plot_ordination(NYC_HANES, ordwu,justDF = T) %>% arrange()
+smoker.wu.data <- plot_ordination(NYC_HANES, ordwu,justDF = TRUE) %>% arrange()
 
 smoker.wu.data$weeksquit <- as.numeric(smoker.wu.data[,"SMQ_4"]) * as.numeric(smoker.wu.data[,"SMQ_4UNIT"])
 smoker.wu.data[!smoker.wu.data$SMOKER3CAT %in% "Former smoker","weeksquit"] <- 5
@@ -252,14 +250,14 @@ permanova
 ```
 
 #### Three categories
-```{r permanova3cat, echo=FALSE, message=FALSE, warning=FALSE, cache=T}
+```{r permanova3cat, echo=FALSE, message=FALSE, warning=FALSE}
 metadata_3cat <- metadata[metadata$smokingstatus %in% c("Cigarette","Never smoker", "Former smoker"),]
 distwu_3cat <- phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% c("Cigarette","Never smoker", "Former smoker")), "wunifrac")
 vegan::adonis(distwu_3cat ~ smokingstatus + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW, metadata_3cat)
 ```
 
 #### All categories
-```{r permanovaallcatÃ², echo=FALSE, message=FALSE, warning=FALSE, cache=T}
+```{r permanovaallcat, echo=FALSE, message=FALSE, warning=FALSE}
 vegan::adonis(distwu ~ smokingstatus, metadata)
 ```
 
@@ -279,8 +277,11 @@ vegan::adonis(distwu ~ smokingstatus, metadata)
 <!-- | Haemophilus	| | -->
   
 ## DESeq2
+
+DESeq2 is presented as sensitivity analysis. Main results are calculated by edgeR. 
+
 ### Current smokers vs. never smokers univariate
-```{r current/never, message=FALSE, cache=TRUE, include=FALSE}
+```{r current/never, message=FALSE, include=FALSE}
 threshold <- 0.05
 dds <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus), parallel = TRUE)
 
@@ -298,15 +299,13 @@ res.maxfold <- sort(res.maxfold, T)
 res.tax$Genus <- factor(as.character(res.tax$Genus), levels = names(res.maxfold))
 res.tax$type <- "Current/Never"
 res.tax <- res.tax[order(res.tax$log2FoldChange),] 
-biosis.tsv <- system.file("extdata","biosis.tsv", package="nychanesmicrobiome", mustWork = TRUE)
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
 ```
 
 ```{r deseq2_univariate, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
   geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
   geom_point(size=3, aes(color = X2)) + 
-  facet_grid(Phylum ~ ., scales = "free", space = "free_y",switch = "y",as.table = T)+
+  facet_grid(Phylum ~ ., scales = "free", space = "free_y",switch = "y",as.table = TRUE)+
   theme_bw() +
   scale_y_discrete(position = "right") +
   scale_color_discrete(name = "Oxygen requirement")+
@@ -322,7 +321,7 @@ plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldCha
 ```
 
 ### Current smokers vs. never smokers adjusting for confounding
-```{r current/never confounding, message=FALSE, cache=TRUE, include=FALSE}
+```{r current/never confounding, message=FALSE, include=FALSE}
 ## Counfounders added in the design's formula
 dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus),parallel = TRUE)
 ##Use two out of three categories in the contrast variable
@@ -344,14 +343,14 @@ res.tax.conf$type <- "Cigarette/Never + conf"
 
 ```
 
-```{r deseq2_multivariate, echo=FALSE,message=FALSE, warning=FALSE,  fig.width=6.5}
+```{r deseq2_multivariate, echo=FALSE,message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
   geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
   geom_point(size=3, aes(color = X2)) + 
-  facet_grid(Phylum~., scales = "free", space = "free_y",switch = "y",as.table = T) +
+  facet_grid(Phylum~., scales = "free", space = "free_y",switch = "y",as.table = TRUE) +
   theme_bw() +
   # guides(color=FALSE) + 
-  facet_grid(Phylum~., scales = "free", space = "free_y",switch = "y",as.table = T)+
+  facet_grid(Phylum~., scales = "free", space = "free_y",switch = "y",as.table = TRUE)+
   scale_y_discrete( position = "right") +
  scale_color_discrete(name = "Oxygen requirement")+
   # guides(color=FALSE) + 
@@ -366,12 +365,12 @@ plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2Fo
 ```
 
 ### Plot univariate vs. multivariate from DESeq2
-```{r, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
+```{r, message=FALSE, warning=FALSE, include=FALSE}
 compardat <- data.frame(univariate = res$log2FoldChange, pvalue = res$pvalue, padj = res$padj, multivariate = res.conf$log2FoldChange)
 compardat$padj[is.na(compardat$padj)] <- 1
 ```
 
-```{r deseq2_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,  fig.width=6.5}
+```{r deseq2_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 ggplot(compardat) +
   geom_point(aes(univariate, multivariate, color=padj < 0.05), size=2) +
   geom_abline() +
@@ -387,7 +386,7 @@ ggplot(compardat) +
 ### Secondhand vs Cigarette/Never
 ```{r cotinine, message=FALSE, cache=FALSE, include=FALSE, warning=FALSE, cache=FALSE}
 NYC_HANEScot <- subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand"))
-ddscot <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANEScot, design = ~ COTININE), parallel = T)
+ddscot <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANEScot, design = ~ COTININE), parallel = TRUE)
 ##Use two out of three categories in the contrast variable
 rescot <- DESeq2::results(ddscot, alpha = 0.05)
 
@@ -398,7 +397,7 @@ corr <- cor.test(res$log2FoldChange[res$padj < 0.05],
 cor.data <- data.frame(smoks=res$log2FoldChange[res$padj < 0.05], cot=rescot$log2FoldChange[res$padj < 0.05])
 ```
 
-```{r deseq2_cotinine_univ, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,  fig.width=6.5}
+```{r deseq2_cotinine_univ, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 plot(ggplot(cor.data,aes(smoks, cot)) + 
   theme_bw() +
   xlab("Univariate Smokers vs. Non-smokers") +
@@ -416,13 +415,13 @@ plot(ggplot(cor.data,aes(smoks, cot)) +
 
 ## edgeR
 ### Cigarette smoker vs Never smoker: univariate
-```{r edgeR univariate differential analysis, echo=FALSE, cache=TRUE, fig.height=6, fig.width=8}
+```{r edgeR univariate differential analysis, echo=FALSE, fig.height=6, fig.width=8}
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 0.05, filtering = T, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 0.05, filtering = TRUE, method = "BH")
 da.univ$table <- da.univ$table[sort(da.univ$table %>% rownames),]
 ```
 
-```{r edgeR_univ, echo=FALSE, fig.height=6, fig.width=8}
+```{r edgeR_univ, echo=FALSE, fig.width=6.5}
 da.univ$table$Genus <- as.character(da.univ$table$Genus)
 da.univ$table[c("New.CleanUp.ReferenceOTU8965","New.ReferenceOTU179"), 'Genus'] <- 'uncultured'
 da.univ$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
@@ -464,11 +463,11 @@ grid::grid.draw(gg_table)
 
 ### Cigarette smoker vs Never smoker: Multivariate
 ```{r edgeR multivariate differential analysis, echo=FALSE}
-da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 0.05, filtering = T)
+da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 0.05, filtering = TRUE)
 da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
 ```
 
-```{r edgeR_multiv, echo=FALSE, fig.height=6, fig.width=7}
+```{r edgeR_multiv, echo=FALSE, fig.width=6.5}
 da.multiv$table$Genus <- as.character(da.multiv$table$Genus)
 da.multiv$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
 da.multiv$table$Genus[is.na(da.multiv$table$Genus)] <- 'unclassified'
@@ -510,15 +509,15 @@ grid::grid.draw(gg_table)
 
 ### Plot univariate vs multivariate beta coefficients
 ```{r Beta coeff uni vs multi, message=FALSE, warning=FALSE, include=FALSE}
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = T, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
 da.univ$table <- da.univ$table[sort(da.univ$table %>% rownames),]
-da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 2, filtering = T)
+da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 2, filtering = TRUE)
 da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
 
 compardat <- data.frame(univariate = da.univ$table$logFC, padj = da.univ$table$PValue, multivariate = da.multiv$table[da.univ$table %>% rownames,]$logFC)
 ```
 
-```{r edgeR_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
+```{r edgeR_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(compardat) +
   geom_abline(color="black", alpha=0.5, size=1) +
   geom_point(aes(univariate, multivariate, color=padj < 0.05), size=2) +
@@ -537,9 +536,9 @@ plot(ggplot(compardat) +
 
 ### Secondhand vs Cigarette/Never
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = T, method = "BH")
+da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
 da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = T, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
 da.univ <- da.univ[sort(da.univ %>% rownames),]
 edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table$logFC, pvalue = da.univ$table[rownames(da.cotinine$table),"FDR"])
 edger.smoker_secondhand<-edger.smoker_secondhand[edger.smoker_secondhand$pvalue<0.05,]
@@ -547,7 +546,7 @@ edger.smoker_secondhand<-edger.smoker_secondhand[edger.smoker_secondhand$pvalue<
 corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
 ```
 
-```{r edger_cotinine_univ_filter, echo=FALSE,  fig.width=6.5, message=FALSE, warning=FALSE}
+```{r edger_cotinine_univ_filter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
 ggplot(edger.smoker_secondhand) + 
   theme_bw() +
   xlab("Crude Smokers vs. Non-smokers") +
@@ -562,9 +561,9 @@ ggplot(edger.smoker_secondhand) +
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = T, method = "BH")
+da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
 da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = T, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
 da.univ <- da.univ[sort(da.univ %>% rownames),]
 
 edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table$logFC, pvalue = da.univ$table[rownames(da.cotinine$table),"FDR"])
@@ -573,7 +572,7 @@ edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotini
 corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
 ```
 
-```{r edger_cotinine_univ_nofilter, echo=FALSE,  fig.width=6.5, message=FALSE, warning=FALSE}
+```{r edger_cotinine_univ_nofilter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
 ggplot(edger.smoker_secondhand) + 
   theme_bw() +
   xlab("Crude Smokers vs. Non-smokers") +
@@ -588,36 +587,36 @@ ggplot(edger.smoker_secondhand) +
 ```
 
 ### Alternative smokers vs Never smoker: univariate
-```{r edgeR_alternative, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_alternative, echo=FALSE, fig.width=6.5}
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 4, alph = 2, filtering = F, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 4, alph = 2, filtering = FALSE, method = "BH")
 da.univ <- da.univ[sort(da.univ %>% rownames),]
-plot_edgeR(~ smokingstatus, pseq = NYC_HANES, coef=4, alph = 0.05, filtering = T, method = "BH", color = "Phylum", sortby = "Phylum",invisbl = FALSE)
+plot_edgeR(~ smokingstatus, pseq = NYC_HANES, coef=4, alph = 0.05, filtering = TRUE, method = "BH", color = "Phylum", sortby = "Phylum",invisbl = FALSE)
 ```
 
 #### E-cigarette vs never smokers
-```{r edgeR_ecigs, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_ecigs, echo=FALSE, fig.width=6.5}
 sample_data(NYC_HANES)$E_CIGARETTES <- factor(sample_data(NYC_HANES)$E_CIGARETTES,labels = c('Yes','No',NaN))
-plot_edgeR(~ E_CIGARETTES, pseq = NYC_HANES, alph = 0.05, filtering = T, method = "BH", sortby = "Phylum") -> edger.univ
+plot_edgeR(~ E_CIGARETTES, pseq = NYC_HANES, alph = 0.05, filtering = TRUE, method = "BH", sortby = "Phylum") -> edger.univ
 ```
 
 #### Hookah pipe vs never smokers
-```{r edgeR_hookah, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_hookah, echo=FALSE, fig.width=6.5}
 sample_data(NYC_HANES)$HOOKAH_PIPE <- factor(sample_data(NYC_HANES)$HOOKAH_PIPE, labels = c('Yes','No',NaN))
-plot_edgeR(~ HOOKAH_PIPE, pseq = NYC_HANES, alph = 0.05, filtering = T, method = "BH", sortby = "Phylum", color = 'Phylum',invisbl = FALSE)
+plot_edgeR(~ HOOKAH_PIPE, pseq = NYC_HANES, alph = 0.05, filtering = TRUE, method = "BH", sortby = "Phylum", color = 'Phylum',invisbl = FALSE)
 ```
 
 #### Cigars and cigarillos vs never smokers
-```{r edgeR_cigars, echo=FALSE, cache=TRUE,  fig.width=6.5}
+```{r edgeR_cigars, echo=FALSE, fig.width=6.5}
 sample_data(NYC_HANES)$CIGARS_CIGARILLOS <- factor(sample_data(NYC_HANES)$CIGARS_CIGARILLOS,labels = c('Yes','No',NaN))
-plot_edgeR(~ CIGARS_CIGARILLOS, pseq = NYC_HANES, alph = 0.05, filtering = T, method = "BH", sortby = "Phylum", invisbl = FALSE)
+plot_edgeR(~ CIGARS_CIGARILLOS, pseq = NYC_HANES, alph = 0.05, filtering = TRUE, method = "BH", sortby = "Phylum", invisbl = FALSE)
 ```
 
 # Analysis on biosis of bacteria
 ## Odds ratio smokers vs never smokers
-```{r OR aerobes anares, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, paged.print=FALSE}
+```{r OR aerobes anares, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 R.utils::gcDLLs()
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = F, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = FALSE, method = "BH")
 da.univ$table %<>% left_join(biosis, by = c("Genus"="X1"))
 da.univ <- da.univ$table
 da.univ$direction <- factor(ifelse(da.univ$logFC >0, 'Enriched in smokers', 'Depleted in smokers'))
@@ -642,59 +641,75 @@ epitools::epitab(x)
 
 ## Cigarette smokers vs Never smokers
 ### GSEA 
-```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.sns <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Cigarette","Never smoker"))
+```{r create GSEA objects, echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
+full_eset <- ExpressionSet(assayData = otu_table(NYC_HANES), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES)))
+full_eset$CATCOTININE <- ifelse(full_eset$COTININE < 3,'low','high')
+full_annotated_ds <- tax_table(NYC_HANES) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
 
-meta <- sample_data(NYC_HANES.sns)
-pdata <- new("AnnotatedDataFrame",meta)
+alt_full_eset <- full_eset[,(full_eset$smokingstatus %in% c("Never smoker","Alternative smoker"))]
+alt_full_eset$smokingstatus <- droplevels(alt_full_eset$smokingstatus)
+levels(alt_full_eset$smokingstatus) <- c('Never','Alternative')
+alt_full_eset$GROUP <- ifelse(alt_full_eset$smokingstatus == "Alternative",1,0)
+
+EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
+sns.eset <- full_eset[,full_eset$smokingstatus %in%  c("Cigarette","Never smoker")]
+NYC_HANES.sns <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Cigarette","Never smoker"))
+sns.eset$GROUP <- ifelse(sns.eset$smokingstatus == "Cigarette",1,0)
+de.sns_eset <- EnrichmentBrowser::deAna(sns.eset, de.method = 'edgeR')
 
 design = model.matrix(~smokingstatus, data=data.frame(sample_data(NYC_HANES.sns)))
 
-eset <- ExpressionSet(assayData = otu_table(NYC_HANES.sns), phenoData = pdata)
-eset$GROUP <- ifelse(eset$smokingstatus == "Cigarette",1,0)
-de.eset <- deAna(eset, de.method = 'edgeR')
-otu_table.voom <- limma::voom(assay(de.eset), design = design, plot = FALSE)
-assay(de.eset) <- otu_table.voom$E
-class(assay(de.eset)) <- "matrix"
+otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.sns_eset), design = design, plot = FALSE)
+SummarizedExperiment::assay(de.sns_eset) <- otu_table.voom$E
+class(SummarizedExperiment::assay(de.sns_eset)) <- "matrix"
 
-# par(mfrow=c(1,2))
-# EnrichmentBrowser::volcano(SummarizedExperiment::rowData(de.eset)$FC, SummarizedExperiment::rowData(de.eset)$ADJ.PVAL) 
-# eset.none <- deAna(de.eset, padj.method="none")
-# EnrichmentBrowser::pdistr(SummarizedExperiment::rowData(eset.none)$ADJ.PVAL)
+sns_ds <- full_annotated_ds %>% filter(OTU %in% taxa_names(NYC_HANES.sns))
+sns_sAero <- (sns_ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+sns_sAnae <- (sns_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+sns_sFana <- (sns_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+sns_my.gs <- list(aero=sns_sAero, anae=sns_sAnae, fana=sns_sFana)
 
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.sns) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.sns)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
-
-EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
-gsea.res <- sbea("gsea", de.eset, my.gs)
-EnrichmentBrowser::gsRanking(gsea.res, signif.only=FALSE)
-
+sns.gsea.res <- EnrichmentBrowser::sbea("gsea", de.sns_eset, sns_my.gs)
+EnrichmentBrowser::gsRanking(sns.gsea.res, signif.only=FALSE)
 ```
 
-#### Significative OTUs
-```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-ind <- which(rowData(de.eset)$ADJ.PVAL < 0.05)
-tax_table(NYC_HANES.sns)[ind,'Genus']
-```
+```{r plot heatmap enrichment, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
+expr = SummarizedExperiment::assay(de.sns_eset)
+expr = expr[SummarizedExperiment::rowData(de.sns_eset)$ADJ.PVAL <= 0.05,]
+grp = factor(de.sns_eset$GROUP, labels = c('Never smoker','Cigarette'))
 
-#### Most significative OTU
-```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-ind <- which.min(rowData(de.eset)$ADJ.PVAL)
-otuname <- rownames(de.eset)[ind]
-smoker.exprs <- assay(de.eset)[ind,de.eset$GROUP==0]
-nsmoker.exprs <- assay(de.eset)[ind,de.eset$GROUP==1]
-boxplot(nsmoker.exprs, smoker.exprs)
-title(paste(otuname, tax_table(NYC_HANES.sns)[otuname,'Genus']))
+expr <- t(scale(t(expr)))
+expr <- expr[rownames(expr) %in% unlist(sns.gsea.res$gs$aero), ]
+
+coll <- c("#B62A84", "#2AB68C")
+names(coll) <- levels(grp)
+coll <- list(Group = coll)
+df <- data.frame(Group = grp)
+ha <- ComplexHeatmap::HeatmapAnnotation(df = df, col=coll)
+
+rownames(expr) <- paste(data.frame(tax_table(NYC_HANES)[rownames(expr),])$Genus, '')
+
+ComplexHeatmap::Heatmap(expr, name = "Expression", 
+                        top_annotation = ha,
+                        show_row_names = (nrow(expr) < 41),
+                        show_column_names = (ncol(expr) < 41),
+                        column_title = "Samples", 
+                        row_title = "OTUs",
+                        cluster_rows = TRUE
+                        # row_order = unlist(gsea.res$gs)
+                       )
+
+
 ```
 
 ### ORA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-ora.res <- EnrichmentBrowser::sbea("ora", de.eset, my.gs, perm=1000)
-EnrichmentBrowser::gsRanking(ora.res, signif.only=FALSE)
+sns_ora.res <- EnrichmentBrowser::sbea("ora", de.sns_eset, sns_my.gs, perm=1000)
+EnrichmentBrowser::gsRanking(sns_ora.res, signif.only=FALSE)
 ```
 
 
@@ -702,207 +717,168 @@ EnrichmentBrowser::gsRanking(ora.res, signif.only=FALSE)
 ### GSEA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
 NYC_HANES.sh <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Secondhand"))
+sh_eset <-  full_eset[,full_eset$smokingstatus %in%  c("Secondhand")]
 
-meta <- sample_data(NYC_HANES.sh)
-meta$catcotinine <- ifelse(meta$COTININE<3,'low','high')
-pdata <- new("AnnotatedDataFrame",meta)
+cotinine_quantiles <- quantile(sh_eset$COTININE ,c(0.33,0.66))
+sh_eset$GROUP <- ifelse(sh_eset$COTININE < cotinine_quantiles[[1]], 0,ifelse(sh_eset$COTININE > cotinine_quantiles[[2]],1,NA))
 
-eset <- ExpressionSet(assayData = otu_table(NYC_HANES.sh), phenoData = pdata)
-##TERTILES DIVISION HERE
-#quantile(meta$COTININE,c(0.33,0.66))
-eset$GROUP <- ifelse(meta$COTININE < 1.76, 0,ifelse(meta$COTININE>4.42,1,NA))
-subeset <- eset[,!is.na(eset$GROUP)]
-design = model.matrix(~catcotinine, data=data.frame(pData(subeset)))
+subeset <- sh_eset[,!is.na(sh_eset$GROUP)]
+sh_design = model.matrix(~CATCOTININE, data = data.frame(pData(subeset)))
+de.sh_eset <- EnrichmentBrowser::deAna(subeset, de.method = 'edgeR')
 
-de.eset <- deAna(subeset, de.method = 'edgeR')
-otu_table.voom <- limma::voom(assay(de.eset), design = design, plot = FALSE)
-assay(de.eset) <- otu_table.voom$E
-class(assay(de.eset)) <- "matrix"
+otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.sh_eset), design = sh_design, plot = FALSE)
+SummarizedExperiment::assay(de.sh_eset) <- otu_table.voom$E
+class(SummarizedExperiment::assay(de.sh_eset)) <- "matrix"
 
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.sh) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.sh)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
+sh_ds <- full_annotated_ds %>% dplyr::filter(OTU %in% taxa_names(NYC_HANES.sh))
+sh_sAero <- (sh_ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+sh_sAnae <- (sh_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+sh_sFana <- (sh_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+sh_my.gs <- list(aero=sh_sAero, anae=sh_sAnae, fana=sh_sFana)
 
-EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
-gsea.res <- EnrichmentBrowser::sbea("gsea", de.eset, my.gs)
-EnrichmentBrowser::gsRanking(gsea.res, signif.only=FALSE)
+sh_gsea.res <- EnrichmentBrowser::sbea("gsea", de.sh_eset, sh_my.gs)
+EnrichmentBrowser::gsRanking(sh_gsea.res, signif.only=FALSE)
 ```
 
 ### ORA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-ora.res <- EnrichmentBrowser::sbea("ora", de.eset, my.gs, perm=0)
-EnrichmentBrowser::gsRanking(ora.res, signif.only=FALSE)
+sh_ora.res <- EnrichmentBrowser::sbea("ora", de.sh_eset, sh_my.gs)
+EnrichmentBrowser::gsRanking(sh_ora.res, signif.only=FALSE)
 ```
 
 
 ## Continuous cotinine
 ### GSVA continuous cotinine on secondhand smokers
 ```{r continuous, echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.sh <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Secondhand"))
-
-meta <- sample_data(NYC_HANES.sh)
-pdata <- new("AnnotatedDataFrame",meta)
-
-eset <- ExpressionSet(assayData = otu_table(NYC_HANES.sh), phenoData = pdata)
-
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.sh) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.sh)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
-
-my.gsva <- GSVA::gsva(eset, my.gs, parallel.sz = 1)
-
-fit <- limma::lmFit(my.gsva, my.gsva$COTININE) %>% eBayes()
-topTable(fit)
+sh.gsva <- GSVA::gsva(sh_eset, sh_my.gs, parallel.sz = 1)
+sh_fit <- limma::lmFit(sh.gsva, sh.gsva$COTININE) %>% eBayes()
+topTable(sh_fit)
 ```
 
 ### GSVA continuous cotinine on cigarette vs never smokers
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.sns <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Cigarette","Never smoker") & !is.na(COTININE))
+NYC_HANES.sns.nc <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Cigarette","Never smoker") & !is.na(COTININE))
 
-meta <- sample_data(NYC_HANES.sns)
-pdata <- new("AnnotatedDataFrame",meta)
+sns.nc.eset <- full_eset[,full_eset$smokingstatus %in%  c("Cigarette","Never smoker") & !is.na(full_eset$COTININE)]
 
-# design = model.matrix(~COTININE, data=data.frame(meta))
+sns.nc_ds <- full_annotated_ds %>% dplyr::filter(OTU %in% taxa_names(NYC_HANES.sns.nc))
+sns.nc_sAero <- (sns.nc_ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+sns.nc_sAnae <- (sns.nc_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+sns.nc_sFana <- (sns.nc_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+sns.nc_my.gs <- list(aero=sns.nc_sAero, anae=sns.nc_sAnae, fana=sns.nc_sFana)
 
-# d = edgeR::DGEList(otu_table(NYC_HANES.sns), group = meta$COTININE)
-# d = edgeR::calcNormFactors(d)
-# otu_table.voom <- voom(d, design = design)
+sns.nc.my.gsva <- GSVA::gsva(sns.nc.eset, sns.nc_my.gs, parallel.sz = 1)
 
-eset <- ExpressionSet(assayData = otu_table(NYC_HANES.sns), phenoData = pdata)
-
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.sns) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.sns)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
-
-my.gsva <- GSVA::gsva(eset, my.gs, parallel.sz = 1)
-
-fit <- limma::lmFit(my.gsva, my.gsva$COTININE) %>% eBayes()
-topTable(fit)
+sns.nc.fit <- limma::lmFit(sns.nc.my.gsva, sns.nc.my.gsva$COTININE) %>% eBayes()
+topTable(sns.nc.fit)
 ```
 
-```{r Data loading2, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
-NYC_HANES <- loadQiimeData(metadata = sas7bdat::read.sas7bdat(system.file("extdata","public_v2_010518.sas7bdat", package="nychanesmicrobiome", mustWork = TRUE))) %>% annotateFactors(.)
-
+```{r Data reloading, message=FALSE, warning=FALSE, include=FALSE}
+NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
 alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
-```
+sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 
-<!-- There are other chunks to be knitted below here but it keeps failing... -->
+NYC_HANES.alt <- subset_samples(NYC_HANES, smokingstatus %in% c("Never smoker", "Alternative smoker"))
+levels(sample_data(NYC_HANES.alt)$smokingstatus) <- c('Never','Alternative')
+
+full_eset <- ExpressionSet(assayData = otu_table(NYC_HANES), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES)))
+full_eset$CATCOTININE <- ifelse(full_eset$COTININE < 3,'low','high')
+full_annotated_ds <- tax_table(NYC_HANES) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
+
+alt_full_eset <- full_eset[,(full_eset$smokingstatus %in% c("Never smoker","Alternative smoker"))]
+alt_full_eset$smokingstatus <- droplevels(alt_full_eset$smokingstatus)
+levels(alt_full_eset$smokingstatus) <- c('Never','Alternative')
+alt_full_eset$GROUP <- ifelse(alt_full_eset$smokingstatus == "Alternative",1,0)
+```
 
 ## Hookah smokers vs Never smokers
 ### GSEA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
-NYC_HANES.hookah <- subset_samples(NYC_HANES, ((smokingstatus %in% c("Never smoker")) | (HOOKAH_PIPE == 1)))
-meta <- sample_data(NYC_HANES.hookah)
-levels(meta$smokingstatus) <- c('Never','Alternative')
-write.table(otu_table(NYC_HANES.hookah), '/tmp/levels')
-design = model.matrix(~smokingstatus, data=data.frame(meta))
-pdata <- new("AnnotatedDataFrame",meta)
+NYC_HANES.hookah <- subset_samples(NYC_HANES.alt, ((smokingstatus %in% c("Never")) | (HOOKAH_PIPE == 1)))
 
-eset <- Biobase::ExpressionSet(assayData = otu_table(NYC_HANES.hookah), phenoData = pdata)
-eset$GROUP <- ifelse(eset$smokingstatus == "Alternative",1,0)
-de.eset <- EnrichmentBrowser::deAna(eset, de.method = 'edgeR')
-write.table(design, '/tmp/design')
-otu_table.voom <- limma::voom(assay(de.eset), design = design, plot = FALSE)
-assay(de.eset) <- otu_table.voom$E
-class(assay(de.eset)) <- "matrix"
+hookah_eset <- alt_full_eset[,(alt_full_eset$smokingstatus %in% c("Never") | tidyr::replace_na(alt_full_eset$HOOKAH_PIPE == 1, FALSE))]
+write.csv(hookah_eset$smokingstatus, '/tmp/a')
+de.hookah_eset <- EnrichmentBrowser::deAna(hookah_eset, de.method = 'edgeR')
 
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.hookah) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.hookah)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
+hookah_design <- model.matrix(~smokingstatus, data = data.frame(pData(hookah_eset)))
+otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.hookah_eset), design = hookah_design , plot = FALSE)
+SummarizedExperiment::assay(de.hookah_eset) <- otu_table.voom$E
+class(SummarizedExperiment::assay(de.hookah_eset)) <- "matrix"
 
-EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
-gsea.res <- EnrichmentBrowser::sbea("gsea", de.eset, my.gs)
-EnrichmentBrowser::gsRanking(gsea.res, signif.only=FALSE)
+hookah_ds <- full_annotated_ds %>% dplyr::filter(OTU %in% taxa_names(NYC_HANES.hookah))
+hookah_sAero <- (hookah_ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+hookah_sAnae <- (hookah_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+hookah_sFana <- (hookah_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+hookah_my.gs <- list(aero=hookah_sAero, anae=hookah_sAnae, fana=hookah_sFana)
+
+hookah_gsea.res <- EnrichmentBrowser::sbea("gsea", de.hookah_eset, hookah_my.gs)
+EnrichmentBrowser::gsRanking(hookah_gsea.res, signif.only=FALSE)
 ```
 
 ### ORA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-ora.res <- EnrichmentBrowser::sbea("ora", de.eset, my.gs, perm=0)
-EnrichmentBrowser::gsRanking(ora.res, signif.only=FALSE)
+hookah_ora.res <- EnrichmentBrowser::sbea("ora", de.hookah_eset, hookah_my.gs, perm=0)
+EnrichmentBrowser::gsRanking(hookah_ora.res, signif.only=FALSE)
 ```
-
 
 ## E-cigarette smokers vs Never smokers
 ### GSEA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.ecig <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Never smoker") | E_CIGARETTES == 1)
-meta <- sample_data(NYC_HANES.ecig)
-levels(meta$smokingstatus) <- c('Never','Alternative')
-pdata <- new("AnnotatedDataFrame",meta)
-design = model.matrix(~smokingstatus, data=data.frame(meta))
+NYC_HANES.ecig <- NYC_HANES.alt %>% subset_samples(., smokingstatus %in% c("Never") | E_CIGARETTES == 1)
 
-eset <- Biobase::ExpressionSet(assayData = otu_table(NYC_HANES.ecig), phenoData = pdata)
-eset$GROUP <- ifelse(eset$smokingstatus == "Alternative",1,0)
-de.eset <- EnrichmentBrowser::deAna(eset, de.method = 'edgeR')
-otu_table.voom <- limma::voom(assay(de.eset), design = design, plot = FALSE)
-assay(de.eset) <- otu_table.voom$E
-class(assay(de.eset)) <- "matrix"
+ecig_eset <- alt_full_eset[,(alt_full_eset$smokingstatus %in% c("Never") | tidyr::replace_na(alt_full_eset$E_CIGARETTES == 1, FALSE))]
 
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.ecig) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.ecig)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
+de.ecig_eset <- EnrichmentBrowser::deAna(ecig_eset, de.method = 'edgeR')
 
-EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
-gsea.res <- EnrichmentBrowser::sbea("gsea", de.eset, my.gs)
-EnrichmentBrowser::gsRanking(gsea.res, signif.only=FALSE)
+ecig_design <- model.matrix(~smokingstatus, data = data.frame(pData(ecig_eset)))
+otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.ecig_eset), design = ecig_design, plot = FALSE)
+SummarizedExperiment::assay(de.ecig_eset) <- otu_table.voom$E
+class(SummarizedExperiment::assay(de.ecig_eset)) <- "matrix"
+
+ecig_ds <- full_annotated_ds %>% dplyr::filter(OTU %in% taxa_names(NYC_HANES.ecig))
+ecig_sAero <- (ecig_ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+ecig_sAnae <- (ecig_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+ecig_sFana <- (ecig_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+ecig_my.gs <- list(aero=ecig_sAero, anae=ecig_sAnae, fana=ecig_sFana)
+
+ecig_gsea.res <- EnrichmentBrowser::sbea("gsea", de.ecig_eset, ecig_my.gs)
+EnrichmentBrowser::gsRanking(ecig_gsea.res, signif.only=FALSE)
 ```
 
 ### ORA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-ora.res <- EnrichmentBrowser::sbea("ora", de.eset, my.gs, perm=0)
-EnrichmentBrowser::gsRanking(ora.res, signif.only=FALSE)
+ecig_ora.res <- EnrichmentBrowser::sbea("ora", de.ecig_eset, ecig_my.gs, perm=0)
+EnrichmentBrowser::gsRanking(ecig_ora.res, signif.only=FALSE)
 ```
-
 
 ## Cigar/cigarillos smokers vs Never smokers
 ### GSEA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-NYC_HANES.cigars <-NYC_HANES %>% subset_samples(., smokingstatus %in% c("Never smoker") | CIGARS_CIGARILLOS == 1)
-meta <- sample_data(NYC_HANES.cigars)
-levels(meta$smokingstatus) <- c('Never','Alternative')
-pdata <- new("AnnotatedDataFrame",meta)
+NYC_HANES.cigars <- NYC_HANES.alt %>% subset_samples(., smokingstatus %in% c("Never") | CIGARS_CIGARILLOS == 1)
 
-design = model.matrix(~smokingstatus, data=data.frame(sample_data(NYC_HANES.cigars)))
+cigars_eset <- alt_full_eset[,(alt_full_eset$smokingstatus %in% c("Never") | tidyr::replace_na(alt_full_eset$CIGARS_CIGARILLOS == 1, FALSE))]
 
-eset <- Biobase::ExpressionSet(assayData = otu_table(NYC_HANES.cigars), phenoData = pdata)
-eset$GROUP <- ifelse(eset$smokingstatus == "Alternative",1,0)
-de.eset <- EnrichmentBrowser::deAna(eset, de.method = 'edgeR')
-otu_table.voom <- limma::voom(assay(de.eset), design = design, plot = FALSE)
-assay(de.eset) <- otu_table.voom$E
-class(assay(de.eset)) <- "matrix"
+de.cigars_eset <- EnrichmentBrowser::deAna(cigars_eset, de.method = 'edgeR')
 
-biosis <- read.csv(biosis.tsv,header = T, sep = '\t')
-ds <- tax_table(NYC_HANES.cigars) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES.cigars)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
-sAero <- (ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
-sAnae <- (ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
-sFana <- (ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
-my.gs <- list(aero=sAero, anae=sAnae, fana=sFana)
+cigars_design <- model.matrix(~smokingstatus, data = data.frame(pData(cigars_eset)))
+otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.cigars_eset), design = cigars_design, plot = FALSE)
+SummarizedExperiment::assay(de.cigars_eset) <- otu_table.voom$E
+class(SummarizedExperiment::assay(de.cigars_eset)) <- "matrix"
 
-EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
-gsea.res <- EnrichmentBrowser::sbea("gsea", de.eset, my.gs)
-EnrichmentBrowser::gsRanking(gsea.res, signif.only=FALSE)
+cigars_ds <- full_annotated_ds %>% dplyr::filter(OTU %in% taxa_names(NYC_HANES.cigars))
+cigars_sAero <- (cigars_ds %>% filter(X2=="Aerobic"))$OTU %>% as.character
+cigars_sAnae <- (cigars_ds %>% filter(X2=="Anaerobic"))$OTU %>% as.character
+cigars_sFana <- (cigars_ds %>% filter(X2=="F Anaerobic" | X2=="Aero / Facultative Anaerobic"))$OTU %>% as.character
+cigars_my.gs <- list(aero=cigars_sAero, anae=cigars_sAnae, fana=cigars_sFana)
+
+cigars_gsea.res <- EnrichmentBrowser::sbea("gsea", de.cigars_eset, cigars_my.gs)
+EnrichmentBrowser::gsRanking(cigars_gsea.res, signif.only=FALSE)
 ```
 
 ### ORA
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-ora.res <- EnrichmentBrowser::sbea("ora", de.eset, my.gs, perm=0)
-EnrichmentBrowser::gsRanking(ora.res, signif.only=FALSE)
+cigars_ora.res <- EnrichmentBrowser::sbea("ora", de.cigars_eset, cigars_my.gs, perm=0)
+EnrichmentBrowser::gsRanking(cigars_ora.res, signif.only=FALSE)
 ```
 

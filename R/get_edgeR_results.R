@@ -34,6 +34,7 @@ get_edgeR_results <- function(formla, pseq=NYC_HANES, method=c("BH","IHW"),
   # nMinimumHaveCount, indicating how many samples must meet the countMinimum criteria
   # If method="IHW", no filtering is performed and and filtering arguments are ignored.
 
+  library(edgeR)
 
   #create model matrix
   dsg.mtrx <- model.matrix(formla, data=data.frame(sample_data(pseq)))
@@ -44,7 +45,7 @@ get_edgeR_results <- function(formla, pseq=NYC_HANES, method=c("BH","IHW"),
   otus <- as(otu_table(pseq), "matrix")
 
   #initialize DGEList object
-  dge <- DGEList(counts = otus)
+  dge <- edgeR::DGEList(counts = otus)
 
   #filtering: keep OTU if minimum number of samples has minimum count
   if(filtering & !method[1] == "IHW") {
@@ -78,7 +79,7 @@ get_edgeR_results <- function(formla, pseq=NYC_HANES, method=c("BH","IHW"),
   # attach taxonomy names
   if(nrow(results$table) > 0) { #if any results pass the filter
     results$table <-
-      cbind(results$table, as.matrix(tax_table(pseq)[rownames(results$table),]))
+      cbind(results$table, as(tax_table(pseq)[rownames(results$table),], 'matrix'))
   }
   results
 }
