@@ -6,7 +6,7 @@
 #' @param notch Logical. Whether or not to return notched boxplots.
 #' @param dist_mtrx Matrix. Matrix of between-group distances, e.g. as returned by \code{phyloseq::distance()}.
 #' @export
-plot_alpha_by <- function(pseq, vars, metadata=sample_data(pseq)[,vars], notch=TRUE) {
+plot_alpha_by <- function(pseq, vars, metadata=sample_data(pseq)[,vars], notch=TRUE, adjust_formula, alpha_p) {
   require(dplyr)
   require(magrittr)
   require(reshape)
@@ -15,12 +15,18 @@ plot_alpha_by <- function(pseq, vars, metadata=sample_data(pseq)[,vars], notch=T
   df_alpha <- cbind(metadata, 
                     estimate_richness(pseq, measures = "Chao1")["Chao1"])
   
+  if(!missing(adjust_formula)) {
+    #this allows residuals instead of raw values
+    mod <- lm(as.formula(paste0("Chao1 ~ ", adjust_formula)), data=df_alpha)
+    df_alpha$Chao1 <-  resid(mod) + coef(mod)[1]
+    df_alpha <- df_alpha[! sapply(names(df_alpha), function(i) length(grep(i,adjust_formula))>0)]
+  }
   
   measure.vars <-names(df_alpha)[-which(names(df_alpha)=="Chao1")]
   
   
   
-  alpha_p <- sapply(measure.vars, function(i) 
+  if(missing(alpha_p)) alpha_p <-  sapply(measure.vars, function(i) 
     kruskal.test(Chao1 ~ eval(as.name(i)), data=df_alpha)$p.value) %>% round(3)
   
   df_alpha$id <- seq_len(nrow(df_alpha))
