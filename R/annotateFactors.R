@@ -44,6 +44,22 @@ annotateFactors <- function(NYC_HANES){
 															   "High school graduate/GED",
 															   "Some College or associate's degree",
 															   "College graduate or more")), "College graduate or more")
+	
+	sample_data(NYC_HANES)$OHQ_1 <- factor(sample_data(NYC_HANES)$OHQ_1, levels=1:7, 
+	                    labels=c("6 mos or less",
+	                             ">6mos, <= 1 yr",
+	                             ">1 yr, <= 2 yr",
+	                             ">2 yr, <= 3 yr",
+	                             ">3 yr, <=5 yr",
+	                             ">5 yr", "never"))
+	
+	sample_data(NYC_HANES)$OHQ_2 <- factor(sample_data(NYC_HANES)$OHQ_2, levels=1:6, 
+	                    labels = c("More than once a day",
+	                               "Once a day",
+	                               "Every few days",
+	                               "Every few weeks",
+	                               "Never",
+	                               "No teeth or dentures"))
 
 	sample_data(NYC_HANES)$OHQ_3 <- factor(sample_data(NYC_HANES)$OHQ_3, labels = c("Yes","No",NA))
 
@@ -133,17 +149,27 @@ annotateFactors <- function(NYC_HANES){
 
 	sample_data(NYC_HANES)$GLUCOSE <- as.integer(sample_data(NYC_HANES)$GLUCOSE)
 
-	sample_data(NYC_HANES)$DBQ_10 <- as.numeric(sample_data(NYC_HANES)$DBQ_10)
-	sample_data(NYC_HANES)$DBQ_10 <- ifelse(sample_data(NYC_HANES)$DBQ_10UNIT=="1",
-	                                        sample_data(NYC_HANES)$DBQ_10*7,
-	                                        ifelse(sample_data(NYC_HANES)$DBQ_10UNIT=="3",
-	                                               sample_data(NYC_HANES)$DBQ_10/4.33333,
-	                                               sample_data(NYC_HANES)$DBQ_10))
+	
+	for(i in 3:10) sample_data(NYC_HANES)[[paste0("DBQ_",i)]] <- format_dbq(sample_data(NYC_HANES), i)
 
 	sample_data(NYC_HANES)$DBQ_10_3CAT <- cut(sample_data(NYC_HANES)$DBQ_10, breaks=c(-1,.999,5,999),
-	                             labels = c("0-<1","1-5","6 or more"))
-
+	                                          labels = c("0-<1","1-5","6 or more"))
+	
 	NYC_HANES
+}
+
+format_dbq <- function(hanes_df, n) {
+  #function to format DBQ (dietary behavior questionnaire) questions
+  varname <- paste0("DBQ_", n)
+  var <- as.numeric(hanes_df[[varname]])
+  
+  #For unit variables, 1=per day, 2=per week, 3=per month
+  #this is to get number per week, so if the unit is 1 (per day), multiply by 7; 
+  #2 (week), by 1; 3 (month), by 1/4.333333 = 3/13
+  mult <- c(7,1,3/13)[hanes_df[[paste0(varname, "UNIT")]]]
+  mult[is.na(mult)] <- 0
+  
+  var * mult
 }
 
 
@@ -192,9 +218,25 @@ annotateFullDataset <- function(dat) {
                                                              "Some College or associate's degree",
                                                              "College graduate or more"))
 
+  dat$OHQ_1 <- factor(dat$OHQ_1, levels=1:7, 
+                      labels=c("6 mos or less",
+                               ">6mos, <= 1 yr",
+                               ">1 yr, <= 2 yr",
+                               ">2 yr, <= 3 yr",
+                               ">3 yr, <=5 yr",
+                               ">5 yr", "never"))
+  
+  dat$OHQ_2 <- factor(dat$OHQ_2, levels=1:6, 
+                      labels = c("More than once a day",
+                                 "Once a day",
+                                 "Every few days",
+                                 "Every few weeks",
+                                 "Never",
+                                 "No teeth or dentures"))
 
-  dat$OHQ_3 <- factor(dat$OHQ_3, labels = c("Yes",
-                                                        "No"))
+
+
+  dat$OHQ_3 <- factor(dat$OHQ_3, labels = c("Yes", "No"))
   dat$OHQ_5 <- as.numeric(sample_data(dat)$OHQ_5)
 
   dat$OHQ_5_3CAT <- cut(dat$OHQ_5, breaks=c(-1,0,5,7),
@@ -278,16 +320,9 @@ annotateFullDataset <- function(dat) {
   dat$GLUCOSE <- as.integer(dat$GLUCOSE)
 
   dat$GLUCOSESI <- as.numeric(dat$GLUCOSESI)
-
-  dat$DBQ_10 <- as.numeric(dat$DBQ_10)
-  dat$DBQ_10UNIT <- as.character(dat$DBQ_10UNIT)
-  dat$DBQ_10 <- ifelse(dat$DBQ_10 == 0, 0,
-                       ifelse(dat$DBQ_10UNIT=="1",
-                              dat$DBQ_10*7,
-                              ifelse(dat$DBQ_10UNIT=="3",
-                                     dat$DBQ_10/4.33333,
-                                     dat$DBQ_10)))
-
+  
+  for(i in 3:10) dat[[paste0("DBQ_",i)]] <- format_dbq(dat, i)
+  
   dat$DBQ_10_3CAT <- cut(dat$DBQ_10, breaks=c(-1,.999,5,999),
                                             labels = c("0-<1","1-5","6 or more"))
 
