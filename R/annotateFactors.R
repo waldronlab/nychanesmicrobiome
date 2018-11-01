@@ -211,9 +211,20 @@ annotateFullDataset <- function(dat) {
   dat$SPAGE <- as.integer(dat$SPAGE)
 
   dat$MERCURYU <- as.double(dat$MERCURYU )
+  
+  #add smoking selection variable
+  dat <- code_smoking_selection_variable(dat)
+  dat$smokingstatus <- factor(dat$smokingstatus, levels = c("cigarette",
+                                                            "never",
+                                                            "former",
+                                                            "alternativeonly",
+                                                            "secondhand"),
+                                                 labels = c("Cigarette","Never smoker",
+                                                            "Former smoker","Alternative smoker",
+                                                            "Secondhand"))
 
   dat$SMOKER <- factor(dat$SMOKER, labels = c("Smoker",
-                                                          "Non smoker"))
+                                              "Non smoker"))
 
   dat$SMQ_13_1_1 <- factor(dat$SMQ_13_1_1, labels = c("Cigarettes",
                                                                   "Cigars/Cigarillos",
@@ -296,7 +307,7 @@ formatMetadata <- function(dat) {
   newdata <- data.frame(
     `Age (yrs)` = rawdata$SPAGE,
     `Age group` = rawdata$AGEGRP5C,
-    Gender = rawdata$GENDER,
+    Sex = rawdata$GENDER,
     `Educational achievement` = rawdata$EDU4CAT,
     `Annual family income` = rawdata$INC3C,
     `Marital Status` = rawdata$DMQ_2,
@@ -305,7 +316,7 @@ formatMetadata <- function(dat) {
     `Gum disease (self-reported)` = rawdata$OHQ_3,
     `Mouthwash use (times per week)` = rawdata$OHQ_5_3CAT,
     `Sugar-sweetened beverages (per week)` = rawdata$DBQ_10_3CAT,
-    `Smoking status` = rawdata$SMOKER3CAT,
+    `Smoking status` = rawdata$smokingstatus,
     check.names=FALSE
   )
 
