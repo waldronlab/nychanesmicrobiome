@@ -34,7 +34,7 @@ code_smoking_selection_variable <- function(nychanes_sas) {
   smoke_df$smokingstatus[smoke_df$final.secondhand] <- "secondhand"
   smoke_df$smokingstatus[smoke_df$cigarette & !smoke_df$final.altsmokers] <- "cigarette"
   
-  final <- cbind(nychanes_full, smokingstatus = smoke_df$smokingstatus)
+  final <- cbind(nychanes_sas, smokingstatus = smoke_df$smokingstatus)
   
   final
   
