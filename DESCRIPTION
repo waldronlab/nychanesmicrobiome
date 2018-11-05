@@ -10,7 +10,7 @@ Description: Reproduces analysis from Audrey Renson's and Francesco Beghini's ma
 License: Artistic-2.0
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.0
 Depends:
   Biobase,
   phyloseq,
@@ -29,14 +29,15 @@ Imports:
   EnrichmentBrowser,
   magrittr,
   dplyr,
-  vegan,
-  reshape2
+  reshape2,
+  vegan
 Suggests: knitr,
     rmarkdown,
     BiocStyle
 VignetteBuilder: knitr
 Collate: 
     'abundance_plots.R'
+    'pilot_selection.R'
     'annotateFactors.R'
     'diversity_plots.R'
     'edgeR_dotplots.R'

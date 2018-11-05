@@ -21,6 +21,9 @@ loadQiimeData <- function(metadata = sas7bdat::read.sas7bdat("http://nychanes.or
   
   link <- read.delim(system.file("extdata","original_map.tsv", package="nychanesmicrobiome", mustWork = TRUE))
   
+  #drop the smoking status variable that is coded by annotateFullDataset()
+  metadata$smokingstatus <- NULL
+  
   new_metadata <- dplyr::left_join(link, metadata, by='KEY')
   
   sample_names(phylo) <- stringr::str_replace_all(sample_names(phylo), 'c|R', '')

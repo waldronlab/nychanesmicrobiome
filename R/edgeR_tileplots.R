@@ -75,10 +75,10 @@ edger_summary_plot <- function(list_models, ttle="Significant genera by sociodem
   }
   
   melted_appearances <- reshape2::melt(matrix_OTU_appears_in_model)
-  melted_appearances$X1 <- factor(melted_appearances$X1,
+  melted_appearances[,1] <- factor(melted_appearances[,1],
                                   levels = all_sig_OTUs$genus)
   
-  ggplot2::ggplot(melted_appearances, ggplot2::aes(x=X1, y=X2, fill=value)) +
+  ggplot2::ggplot(melted_appearances, ggplot2::aes(x=Var1, y=Var2, fill=value)) +
     ggplot2::geom_tile() +
     ggplot2::scale_fill_gradient2(name="Appeared") +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, vjust=1, hjust = 1),
