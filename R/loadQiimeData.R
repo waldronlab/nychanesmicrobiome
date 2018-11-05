@@ -33,7 +33,7 @@ loadQiimeData <- function(metadata = sas7bdat::read.sas7bdat("http://nychanes.or
                                             levels=1:5, 
                                             labels=c("alternativeonly","never","former","secondhand","cigarette"))
   
-  new_metadata_smokingstatus <- dplyr::full_join(new_metadata, sample_selection, by=c('KEY' = 'key'))
+  # new_metadata_smokingstatus <- dplyr::full_join(new_metadata, sample_selection, by=c('KEY' = 'key'))
   rownames(new_metadata_smokingstatus) <- new_metadata_smokingstatus$Burklab_ID
   sample_data(phylo) <- new_metadata_smokingstatus
   

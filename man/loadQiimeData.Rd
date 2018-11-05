@@ -4,7 +4,8 @@
 \alias{loadQiimeData}
 \title{Import NYC HANES-II microbiome data as a \code{phyloseq} object.}
 \usage{
-loadQiimeData()
+
+  loadQiimeData(metadata = sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2018/01/public_v2_010518.sas7bdat"))
 }
 \description{
 Import NYC HANES-II microbiome data as a \code{phyloseq} object.

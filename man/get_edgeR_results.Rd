@@ -16,7 +16,8 @@ get_edger_results_all_levels(formla, ...)
 
 edger_list_to_data.frame(list_models)
 
-get_all_edgeR_models(vars, varlabels, adjusted_for, to.data.frame = TRUE, ...)
+get_all_edgeR_models(vars, varlabels = vars, adjusted_for,
+  to.data.frame = TRUE, ...)
 }
 \arguments{
 \item{formla}{formula. specifies the design matrix used by \code{edgeR::glmFit}.}

@@ -61,20 +61,21 @@ biosis <- read.csv(biosis.tsv,header = TRUE, sep = '\t')
 ```{r Table1, echo=FALSE, message=FALSE, warning=FALSE}
 metadata <- data.frame(sample_data(NYC_HANES))
 
-variablesToLook <- c('smokingstatus', "GENDER","RACE","EDU4CAT","SPAGE", "AGEGRP5C","BMI","DBTS_NEW","SR_ACTIVE","SMQ_7","INC25KMOD","POVGROUP6_0812CT","COTININE","MERCURYU","OHQ_5")
+variablesToLook <- c("GENDER","RACE","EDU4CAT","SPAGE", "AGEGRP5C","BMI","DBTS_NEW","SR_ACTIVE","SMQ_7","INC25KMOD","POVGROUP6_0812CT","COTININE","MERCURYU","OHQ_5")
 factorVars <- c("AGEGRP5C", "RACE","EDU4CAT","DBTS_NEW","SR_ACTIVE","INC25KMOD","POVGROUP6_0812CT", "GENDER")
 table1 <- tableone::CreateTableOne(vars = variablesToLook,
                                    data = metadata, 
-                                   factorVars = factorVars, 
+                                   factorVars = factorVars,
+                                   strata = "smokingstatus",
                                    includeNA = TRUE,
-                                   test = TRUE)
+                                   test = FALSE)
 
 alternative_habits <-metadata[metadata$smokingstatus == 'Alternative smoker',c('E_CIGARETTES','HOOKAH_PIPE','CIGARS_CIGARILLOS')] %>% dplyr::mutate_all(dplyr::funs(as.numeric)) %>% colSums(na.rm = TRUE)
 
 table1_data <- formatMetadata(NYC_HANES)
 
 table1 <- prettytable_autoindent(vars = names(table1_data),data = table1_data, 
-                         includeNA = TRUE,test = FALSE)
+                         includeNA = TRUE,test = FALSE, strata = "Smoking status")
 knitr::kable(table1, format="markdown")
 ```
 
@@ -136,12 +137,31 @@ aovSMOKINGSTATUS<-aov(Chao1 ~ smokingstatus,alphadiv)
 summary(aovSMOKINGSTATUS)
 ```
 
+# Serum cotinine vs Smoking status
+```{r Serum cotinine vs Smoking status, message=FALSE, warning=FALSE, paged.print=FALSE,fig.width=6}
+ggplot(metadata, aes(smokingstatus, COTININE, fill = smokingstatus)) + 
+  stat_boxplot() +
+  scale_fill_manual(values = scale_palette) + 
+  theme_bw() +
+  scale_x_discrete(labels = c("Cigarette\nsmokers","Never\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke")) +
+  xlab('Reported smoking status') +
+  ylab('Serum Cotinine (ng/ml)') +
+  guides(fill = FALSE) +
+  theme(strip.background = element_rect(colour = "transparent", fill = "transparent"),
+        strip.text.y = element_text(angle = 180),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=12),
+        legend.position = 'bottom')
+```
+
 # Beta Diversity
 ```{r Calculate distances, warning=FALSE, include=FALSE}
 distwu <- phyloseq::distance(NYC_HANES, "wunifrac")
 ordwu <-  ordinate(NYC_HANES, method = "MDS", distance = distwu, weighted = TRUE)
 
-smoker.wu.data <- plot_ordination(NYC_HANES, ordwu,justDF = TRUE) %>% arrange()
+smoker.wu.data <- plot_ordination(NYC_HANES, ordwu,justDF = TRUE) %>% dplyr::arrange()
 
 smoker.wu.data$weeksquit <- as.numeric(smoker.wu.data[,"SMQ_4"]) * as.numeric(smoker.wu.data[,"SMQ_4UNIT"])
 smoker.wu.data[!smoker.wu.data$SMOKER3CAT %in% "Former smoker","weeksquit"] <- 5
@@ -155,6 +175,7 @@ proteobacteria <- tax_table(NYC_HANES.phylum.relab)[tax_table(NYC_HANES.phylum.r
 ```{r pcoa_smokers_neversmoker, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(subset(smoker.wu.data,smokingstatus  %in% c("Cigarette","Never smoker"))) + 
   geom_point(aes(Axis.1,Axis.2, color=smokingstatus), size=3, alpha=0.7) +
+  stat_ellipse(aes(Axis.1, Axis.2, color=smokingstatus), type = 't') +
   theme_bw() +
   theme(axis.text = element_text(size = 13),
         axis.title = element_text(size = 12),
@@ -234,7 +255,7 @@ permanova.res <- data.frame()
 for(s in combn(levels(metadata$smokingstatus),2, simplify = FALSE)){
   metadata_2cat <- metadata[metadata$smokingstatus %in% s,]
   distwu_2cat <- phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
-  permanova <- vegan::adonis(formula = distwu_2cat ~ smokingstatus + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW, data = metadata_2cat)
+  permanova <- vegan::adonis(formula = distwu_2cat ~ smokingstatus +  OHQ_3 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW, data = metadata_2cat)
   permanova.res %<>% bind_rows(data.frame(contrast = stringr::str_c(s, collapse = " vs "), r2=permanova$aov.tab[1,5],pvalue=permanova$aov.tab[1,6])) %>% arrange(pvalue)
 }
   knitr::kable(permanova.res)
@@ -323,7 +344,7 @@ plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldCha
 ### Current smokers vs. never smokers adjusting for confounding
 ```{r current/never confounding, message=FALSE, include=FALSE}
 ## Counfounders added in the design's formula
-dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus),parallel = TRUE)
+dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ DBQ_1 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus),parallel = TRUE)
 ##Use two out of three categories in the contrast variable
 res.conf <- DESeq2::results(dds.conf, contrast = c("smokingstatus","Cigarette","Never smoker"), pAdjustMethod = "BH")
 res.filtered.conf <- res.conf[!is.na(res.conf$padj),]
@@ -461,9 +482,44 @@ gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
 grid::grid.draw(gg_table)
 ```
 
+## Cigarette smoker vs Never smoker: Univariate phylum level
+```{r edgeR_univariate_phylum,echo=FALSE, fig.width=6.5}
+sample_data(NYC_HANES.phylum)$smokingstatus <- relevel(sample_data(NYC_HANES.phylum)$smokingstatus,"Never smoker")
+DGELRT <- get_edgeR_results(~ smokingstatus, pseq = NYC_HANES.phylum, coef = 2, alph = 0.05, filtering = TRUE, method = "BH")
+
+p <-
+  ggplot2::ggplot(DGELRT$table, ggplot2::aes(x=logFC, y=Phylum, color=Phylum)) +
+  ggplot2::geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
+  ggplot2::geom_point(size=3) +
+  ggplot2::guides(color=ggplot2::guide_legend(title='Phylum')) +
+  ggplot2::theme_light() +
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, hjust = 0, vjust=0.5),
+                 axis.text.y = ggplot2::element_text(face = "italic"),
+                 axis.text = ggplot2::element_text(size=12),
+                 legend.text = ggplot2::element_text(size=12),
+                 legend.box.margin=margin(-27,0,-27,-27),
+                 legend.title = ggplot2::element_text(size=14),
+                 title = ggplot2::element_text(size=15),
+                 plot.title = ggplot2::element_text(margin = ggplot2::margin(b=26))) +
+  ggplot2::scale_y_discrete(position="right") +
+  ggplot2::labs(x="Log2-fold change") +
+  ggplot2::xlim(-3.1, 3.1) +
+  ggplot2::ggtitle('Cigarette vs. Never smoker') + 
+  ggplot2::scale_color_manual(values=phyla_colors)
+
+p1 <- p + 
+  ggplot2::annotation_custom(grob = grid::textGrob('Lower in smokers', gp=grid::gpar(col="black", fontsize=11)),  xmin = -1.8, xmax = -1.8, ymin = 5.8, ymax = 5.8) +
+  ggplot2::annotation_custom(grob = grid::textGrob('Higher in smokers', gp=grid::gpar(col="black", fontsize=11)),  xmin = 1.8, xmax = 1.8, ymin = 5.8, ymax = 5.8)
+
+
+gg_table <- ggplot_gtable(ggplot_build(p1))
+gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
+grid::grid.draw(gg_table)
+```
+
 ### Cigarette smoker vs Never smoker: Multivariate
 ```{r edgeR multivariate differential analysis, echo=FALSE}
-da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 0.05, filtering = TRUE)
+da.multiv <- get_edgeR_results(~ smokingstatus + DBQ_1 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 0.05, filtering = TRUE)
 da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
 ```
 
@@ -540,7 +596,7 @@ da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, sm
 da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
 da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
 da.univ <- da.univ[sort(da.univ %>% rownames),]
-edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table$logFC, pvalue = da.univ$table[rownames(da.cotinine$table),"FDR"])
+edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table[rownames(da.cotinine$table),"logFC"], pvalue = da.univ$table[rownames(da.cotinine$table),"FDR"])
 edger.smoker_secondhand<-edger.smoker_secondhand[edger.smoker_secondhand$pvalue<0.05,]
 
 corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")

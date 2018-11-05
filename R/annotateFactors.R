@@ -305,7 +305,7 @@ formatMetadata <- function(dat) {
     `Gum disease (self-reported)` = rawdata$OHQ_3,
     `Mouthwash use (times per week)` = rawdata$OHQ_5_3CAT,
     `Sugar-sweetened beverages (per week)` = rawdata$DBQ_10_3CAT,
-    `Smoking status` = rawdata$SMOKER3CAT,
+    `Smoking status` = rawdata$smokingstatus,
     check.names=FALSE
   )
 
