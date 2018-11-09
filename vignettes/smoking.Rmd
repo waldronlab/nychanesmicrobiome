@@ -63,22 +63,19 @@ biosis <- read.csv(biosis.tsv,header = TRUE, sep = '\t')
 ```{r Table1, echo=FALSE, message=FALSE, warning=FALSE}
 metadata <- data.frame(sample_data(NYC_HANES))
 
-variablesToLook <- c("GENDER","RACE","EDU4CAT","SPAGE", "AGEGRP5C","BMI","DBTS_NEW","SR_ACTIVE","SMQ_7","INC25KMOD","POVGROUP6_0812CT","COTININE","MERCURYU","OHQ_5")
-factorVars <- c("AGEGRP5C", "RACE","EDU4CAT","DBTS_NEW","SR_ACTIVE","INC25KMOD","POVGROUP6_0812CT", "GENDER")
+variablesToLook <- c("GENDER","RACE","EDU4CAT","SPAGE", "AGEGRP5C","DBTS_NEW","SR_ACTIVE","INC25KMOD","COTININE","OHQ_3")
+factorVars <- c("AGEGRP5C", "RACE","EDU4CAT","DBTS_NEW","SR_ACTIVE","INC25KMOD", "GENDER")
 table1 <- tableone::CreateTableOne(vars = variablesToLook,
                                    data = metadata, 
                                    factorVars = factorVars,
                                    strata = "smokingstatus",
+                                   
                                    includeNA = TRUE,
                                    test = FALSE)
 
 alternative_habits <-metadata[metadata$smokingstatus == 'Alternative smoker',c('E_CIGARETTES','HOOKAH_PIPE','CIGARS_CIGARILLOS')] %>% dplyr::mutate_all(dplyr::funs(as.numeric)) %>% colSums(na.rm = TRUE)
 
-table1_data <- formatMetadata(NYC_HANES)
-
-table1 <- prettytable_autoindent(vars = names(table1_data),data = table1_data, 
-                         includeNA = TRUE,test = FALSE, strata = "Smoking status")
-knitr::kable(table1, format="markdown")
+print(table1, explain = TRUE, nonnormal = c('COTININE'))
 ```
 
 ```{r Build taxonomy objects, include=FALSE}
@@ -646,11 +643,11 @@ ggplot(edger.smoker_secondhand) +
         axis.title = element_text(size = 15))
 ```
 
-### Secondhand vs Multivariate Cigarette/Never: only significant OTUs
+### Multivariate Secondhand vs Multivariate Cigarette/Never: only significant OTUs
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
+da.cotinine <- get_edgeR_results(~ COTININE + AGEGRP4C + EDU3CAT, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
 da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
-da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 2, filtering = TRUE)
+da.multiv <- get_edgeR_results(~ smokingstatus + AGEGRP4C + EDU3CAT, coef = 2, alph = 2, filtering = TRUE)
 # da.multiv <- get_edgeR_results(~ smokingstatus + AGEGRP4C + EDU3CAT, coef = 2, alph = 2, filtering = TRUE)
 da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
 
@@ -664,7 +661,7 @@ corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smo
 ggplot(edger.smoker_secondhand) + 
   theme_bw() +
   xlab("Multivariate Smokers vs. Non-smokers") +
-  ylab("Crude Cotinine Levels") +
+  ylab("Multivariate Cotinine Levels") +
   geom_text(aes(1,-0.3,label = sprintf("p-value: %s\ncor: %s",signif(corr$p.value,2),signif(corr$estimate,2))),size = 5) +
   geom_point(aes(smokers, secondhand, color=pvalue <= 0.05), size=3) +
   scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
