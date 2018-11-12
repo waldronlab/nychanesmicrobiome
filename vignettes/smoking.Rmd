@@ -19,7 +19,11 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
 suppressPackageStartupMessages({library(nychanesmicrobiome)})
 
 scale_palette <- c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00")
@@ -69,13 +73,13 @@ table1 <- tableone::CreateTableOne(vars = variablesToLook,
                                    data = metadata, 
                                    factorVars = factorVars,
                                    strata = "smokingstatus",
-                                   
                                    includeNA = TRUE,
                                    test = FALSE)
 
 alternative_habits <-metadata[metadata$smokingstatus == 'Alternative smoker',c('E_CIGARETTES','HOOKAH_PIPE','CIGARS_CIGARILLOS')] %>% dplyr::mutate_all(dplyr::funs(as.numeric)) %>% colSums(na.rm = TRUE)
 
-print(table1, explain = TRUE, nonnormal = c('COTININE'))
+x <- print(table1, explain = TRUE, printToggle = FALSE,nonnormal = c('COTININE'))
+knitr::kable(x)
 ```
 
 ```{r Build taxonomy objects, include=FALSE}
@@ -343,7 +347,7 @@ plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldCha
 ### Current smokers vs. never smokers adjusting for confounding
 ```{r current/never confounding, message=FALSE, include=FALSE}
 ## Counfounders added in the design's formula
-dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ DBQ_1 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus),parallel = TRUE,  quiet=TRUE)
+dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT +smokingstatus) ,parallel = TRUE,  quiet=TRUE)
 ##Use two out of three categories in the contrast variable
 res.conf <- DESeq2::results(dds.conf, contrast = c("smokingstatus","Cigarette","Never smoker"), pAdjustMethod = "BH")
 res.filtered.conf <- res.conf[!is.na(res.conf$padj),]
@@ -965,5 +969,9 @@ EnrichmentBrowser::gsRanking(cigars_gsea.res, signif.only=FALSE)
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 cigars_ora.res <- EnrichmentBrowser::sbea("ora", de.cigars_eset, cigars_my.gs, perm=0)
 EnrichmentBrowser::gsRanking(cigars_ora.res, signif.only=FALSE)
+```
+
+```{r}
+sessionInfo()
 ```
 
