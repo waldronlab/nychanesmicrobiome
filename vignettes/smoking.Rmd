@@ -41,20 +41,14 @@ theme_transparent <- ggplot2::theme(axis.title = ggplot2::element_text(colour = 
 
 ```
 
-<!-- Latest results: -->
-
-<!-- * No rarefy at even dept -->
-<!-- * OTU picking with min size = 10 reads/OTU -->
-<!-- * Cutoff threshold at 1000 reads/sample -->
-<!-- + 26 samples with <1000 reads removed, around the 5% error of PCR failure that Christine told me -->
-<!-- + Removal of these samples is done in phyloseq and not during QIIME processing -->
-
 ```{r Data loading, message=FALSE, warning=FALSE, include=FALSE}
 NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
+# Extract alternative smokers who also smoke cigarettes and remove them
 alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 
+# Subset alternative smokers
 NYC_HANES.alt <- subset_samples(NYC_HANES, smokingstatus %in% c("Never smoker", "Alternative smoker"))
 levels(sample_data(NYC_HANES.alt)$smokingstatus) <- c('Never','Alternative')
 
@@ -304,7 +298,7 @@ vegan::adonis(distwu ~ smokingstatus, metadata)
 
 DESeq2 is presented as sensitivity analysis. Main results are calculated by edgeR. 
 
-### Current smokers vs. never smokers univariate
+### Current smokers vs. never smokers crude
 ```{r current/never, message=FALSE, include=FALSE}
 threshold <- 0.05
 dds <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus), parallel = TRUE)
@@ -316,7 +310,6 @@ res.filtered <- res.filtered[res.filtered$padj < threshold,]
 
 ## Create a table with the taxonomy of the significant OTUs 
 res.tax <- cbind(as.data.frame(res.filtered), as.matrix(tax_table(NYC_HANES)[rownames(res.filtered),]))
-dds.taxa <- rownames(res.tax)
 res.maxfold <- tapply(res.tax$log2FoldChange, res.tax$Genus, function(x) max(x))
 res.maxfold <- sort(res.maxfold, T)
 # res.tax["New.ReferenceOTU179","Genus"] <- res.tax["New.ReferenceOTU179","Phylum"] %>% as.character
@@ -325,7 +318,7 @@ res.tax$type <- "Current/Never"
 res.tax <- res.tax[order(res.tax$log2FoldChange),] 
 ```
 
-```{r deseq2_univariate, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
+```{r deseq2_crude, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
   geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
   geom_point(size=3, aes(color = X2)) + 
@@ -347,15 +340,15 @@ plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldCha
 ### Current smokers vs. never smokers adjusting for confounding
 ```{r current/never confounding, message=FALSE, include=FALSE}
 ## Counfounders added in the design's formula
-dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT +smokingstatus) ,parallel = TRUE,  quiet=TRUE)
+dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ AGEGRP4C + GENDER + RACE + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus) ,parallel = TRUE,  quiet=TRUE)
 ##Use two out of three categories in the contrast variable
 res.conf <- DESeq2::results(dds.conf, contrast = c("smokingstatus","Cigarette","Never smoker"), pAdjustMethod = "BH")
 res.filtered.conf <- res.conf[!is.na(res.conf$padj),]
 res.filtered.conf <- res.filtered.conf[res.filtered.conf$padj < threshold,]
 
+#Create result table with DA OTUs
 res.tax.conf <- cbind(as.data.frame(res.filtered.conf), as.matrix(tax_table(NYC_HANES)[rownames(res.filtered.conf),]))
 res.tax.conf <- res.tax.conf[!is.na(res.tax.conf$Family),]
-dds.taxa.conf <- rownames(res.tax.conf)
 res.maxfold.conf <- tapply(res.tax.conf$log2FoldChange, res.tax.conf$Genus, function(x) max(x))
 res.maxfold.conf <- sort(res.maxfold.conf, T)
 res.tax.conf$Genus <- as.character(res.tax.conf$Genus)
@@ -368,7 +361,7 @@ res.tax.conf$type <- "Cigarette/Never + conf"
 
 ```
 
-```{r deseq2_multivariate, echo=FALSE,message=FALSE, warning=FALSE, fig.width=6.5}
+```{r deseq2_adjusted, echo=FALSE,message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
   geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
   geom_point(size=3, aes(color = X2)) + 
@@ -389,15 +382,17 @@ plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2Fo
 )
 ```
 
-### Plot univariate vs. multivariate from DESeq2
+### Plot crude vs. adjusted from DESeq2
 ```{r, message=FALSE, warning=FALSE, include=FALSE}
-compardat <- data.frame(univariate = res$log2FoldChange, pvalue = res$pvalue, padj = res$padj, multivariate = res.conf$log2FoldChange)
+#Take log2fc from crude and adjusted analysis. The pvalue and FDR are from the crude analysis
+compardat <- data.frame(crude = res$log2FoldChange, pvalue = res$pvalue, padj = res$padj, adjusted = res.conf$log2FoldChange)
+#Set pvalues with NAs at 1
 compardat$padj[is.na(compardat$padj)] <- 1
 ```
 
 ```{r deseq2_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 ggplot(compardat) +
-  geom_point(aes(univariate, multivariate, color=padj < 0.05), size=2) +
+  geom_point(aes(crude, adjusted, color=padj < 0.05), size=2) +
   geom_abline() +
   scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
   scale_x_continuous(limits = c(-2,2))+
@@ -410,11 +405,15 @@ ggplot(compardat) +
 
 ### Secondhand vs Cigarette/Never
 ```{r cotinine, message=FALSE, cache=FALSE, include=FALSE, warning=FALSE, cache=FALSE}
+#Extract all samples marked as SHS 
 NYC_HANEScot <- subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand"))
+#NYC_HANEScot <- subset_samples(NYC_HANEScot, smokingstatus %in% c("Secondhand") & COTININE < 3)
+#Build DESeq2 object using continuous cotinine variable
 ddscot <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANEScot, design = ~ COTININE), parallel = TRUE)
-##Use two out of three categories in the contrast variable
 rescot <- DESeq2::results(ddscot, alpha = 0.05)
 
+#Select OTUs significant in the crude smokers vs non-smokers model. 
+#Correlation is calculated by taking the log2FC from the crude smokers vs non-smokers model and the crude cotinine model
 corr <- cor.test(res$log2FoldChange[res$padj < 0.05], 
                  rescot$log2FoldChange[res$padj < 0.05], 
                  use="pairwise.complete.obs")
@@ -425,8 +424,8 @@ cor.data <- data.frame(smoks=res$log2FoldChange[res$padj < 0.05], cot=rescot$log
 ```{r deseq2_cotinine_univ, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 plot(ggplot(cor.data,aes(smoks, cot)) + 
   theme_bw() +
-  xlab("Univariate Smokers vs. Non-smokers") +
-  ylab("Univariate Cotinine Levels") +
+  xlab("Crude Smokers vs. Non-smokers") +
+  ylab("Crude Cotinine Levels") +
   geom_text(aes(0.5,0.25,label = stringr::str_c('p-value: ',signif(corr$p.value,2), '\nCorr: ', signif(corr$estimate,2))), color="black") +
   geom_point(size=4, color = '#e41a1c') +
   geom_smooth(method=lm, se = FALSE,color="red") +
@@ -439,10 +438,12 @@ plot(ggplot(cor.data,aes(smoks, cot)) +
 ```
 
 ## edgeR
-### Cigarette smoker vs Never smoker: univariate
-```{r edgeR univariate differential analysis, echo=FALSE, fig.height=6, fig.width=8}
+### Cigarette smoker vs Never smoker: crude
+
+```{r edgeR crude differential analysis, echo=FALSE, fig.height=6, fig.width=8}
+#Set Never smokers as first level
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 0.05, filtering = TRUE, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 0.05, method = "BH")
 da.univ$table <- da.univ$table[sort(da.univ$table %>% rownames),]
 ```
 
@@ -480,16 +481,15 @@ p1 <- p +
   ggplot2::annotation_custom(grob = grid::textGrob('Lower in smokers'),  xmin = -1.8, xmax = -1.8, ymin = 29.7, ymax = 29.7) +
   ggplot2::annotation_custom(grob = grid::textGrob('Higher in smokers'),  xmin = 1.8, xmax = 1.8, ymin = 29.7, ymax = 29.7)
 
-
 gg_table <- ggplot_gtable(ggplot_build(p1))
 gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
 grid::grid.draw(gg_table)
 ```
 
-## Cigarette smoker vs Never smoker: Univariate phylum level
-```{r edgeR_univariate_phylum,echo=FALSE, fig.width=6.5}
+## Cigarette smoker vs Never smoker: crude phylum level
+```{r edgeR_crude_phylum,echo=FALSE, fig.width=6.5}
 sample_data(NYC_HANES.phylum)$smokingstatus <- relevel(sample_data(NYC_HANES.phylum)$smokingstatus,"Never smoker")
-DGELRT <- get_edgeR_results(~ smokingstatus, pseq = NYC_HANES.phylum, coef = 2, alph = 0.05, filtering = TRUE, method = "BH")
+DGELRT <- get_edgeR_results(~ smokingstatus, pseq = NYC_HANES.phylum, coef = 2, alph = 0.05, method = "BH")
 
 p <-
   ggplot2::ggplot(DGELRT$table, ggplot2::aes(x=logFC, y=Phylum, color=Phylum)) +
@@ -521,23 +521,24 @@ gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
 grid::grid.draw(gg_table)
 ```
 
-### Cigarette smoker vs Never smoker: Multivariate
-```{r edgeR multivariate differential analysis, echo=FALSE}
-da.multiv <- get_edgeR_results(~ smokingstatus + DBQ_1 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 0.05, filtering = TRUE)
-da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
+### Cigarette smoker vs Never smoker: Adjusted
+```{r edgeR adjusted differential analysis, echo=FALSE}
+#Adjusted model with race, sex, age, physical activity, education level, diabetes status (based on serum HbA1c) and self-reported gum disease
+da.adj <- get_edgeR_results(~ smokingstatus + AGEGRP4C + GENDER + RACE + SR_ACTIVE + EDU3CAT + DBTS_NEW, coef = 2, alph = 0.05)
+da.adj <- da.adj[sort(da.adj %>% rownames),]
 ```
 
 ```{r edgeR_multiv, echo=FALSE, fig.width=6.5}
-da.multiv$table$Genus <- as.character(da.multiv$table$Genus)
-da.multiv$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
-da.multiv$table$Genus[is.na(da.multiv$table$Genus)] <- 'unclassified'
-ord <- order(da.multiv$table[['Phylum']], da.multiv$table$logFC, decreasing=TRUE)
-da.multiv$table$Genus <- factor(da.multiv$table$Genus, levels = unique(da.multiv$table$Genus[ord]))
+da.adj$table$Genus <- as.character(da.adj$table$Genus)
+da.adj$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
+da.adj$table$Genus[is.na(da.adj$table$Genus)] <- 'unclassified'
+ord <- order(da.adj$table[['Phylum']], da.adj$table$logFC, decreasing=TRUE)
+da.adj$table$Genus <- factor(da.adj$table$Genus, levels = unique(da.adj$table$Genus[ord]))
 phyla_colors <- c('#FF9900FF','#0DFF00FF','#00FF9FFF','#A600FFFF','#FF00ACFF')
 
 
 p <-
-  ggplot2::ggplot(da.multiv$table, ggplot2::aes(x=logFC, y=Genus, color=Phylum)) +
+  ggplot2::ggplot(da.adj$table, ggplot2::aes(x=logFC, y=Genus, color=Phylum)) +
   ggplot2::geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
   ggplot2::geom_point(size=3) +
   ggplot2::guides(color=ggplot2::guide_legend(title='Phylum')) +
@@ -567,20 +568,23 @@ grid::grid.draw(gg_table)
 
 ```
 
-### Plot univariate vs multivariate beta coefficients
-```{r Beta coeff uni vs multi, message=FALSE, warning=FALSE, include=FALSE}
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
+### Plot crude vs adjusted beta coefficients
+```{r Beta coeff crude vs adjusted, message=FALSE, warning=FALSE, include=FALSE}
+#Get crude edgeR results without filtering for FDR 
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, method = "BH")
 da.univ$table <- da.univ$table[sort(da.univ$table %>% rownames),]
-da.multiv <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW , coef = 2, alph = 2, filtering = TRUE)
-da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
+#Get adjusted edgeR results without filtering for FDR 
+da.adj <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + OHQ_3, coef = 2, alph = 2)
+da.adj <- da.adj[sort(da.adj %>% rownames),]
 
-compardat <- data.frame(univariate = da.univ$table$logFC, padj = da.univ$table$PValue, multivariate = da.multiv$table[da.univ$table %>% rownames,]$logFC)
+# Build result table by taking log2FC from crude and adjusted models and FDR from the crude one.
+compardat <- data.frame(crude = da.univ$table$logFC, padj = da.univ$table$FDR, adjusted = da.adj$table[da.univ$table %>% rownames,]$logFC)
 ```
 
 ```{r edgeR_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
 plot(ggplot(compardat) +
   geom_abline(color="black", alpha=0.5, size=1) +
-  geom_point(aes(univariate, multivariate, color=padj < 0.05), size=2) +
+  geom_point(aes(crude, adjusted, alpha=padj < 0.05), size=2) +
   scale_colour_manual(values = setNames(c('grey','black'),c(FALSE, TRUE)), guide=FALSE) +
   scale_x_continuous(limits = c(-2,2))+
   scale_y_continuous(limits = c(-2,2))+
@@ -596,25 +600,35 @@ plot(ggplot(compardat) +
 
 ### Secondhand vs Cigarette/Never: only significant OTUs
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
-da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
-da.univ <- da.univ[sort(da.univ %>% rownames),]
-edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table[rownames(da.cotinine$table),"logFC"], pvalue = da.univ$table[rownames(da.cotinine$table),"FDR"])
-edger.smoker_secondhand<-edger.smoker_secondhand[edger.smoker_secondhand$pvalue<0.05,]
+#Get crude edgeR results for model built with continuous cotinin without filtering for FDR 
+da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, method = "BH")
 
-corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
+da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
+#Get crude edgeR results for model smokers vs non-smokers without filtering
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, method = "BH")
+da.univ <- da.univ[sort(da.univ %>% rownames),]
+
+#Build result table. log2FC of crude smokers vs non-smokers and crude continuous cotinene are taken with the pvalue from the crude smokers vs non-smokers.
+edger.smoker_secondhand_crude <- data.frame(S_NS = da.univ$table[rownames(da.cotinine$table),"logFC"], 
+                                            SHS = da.cotinine$table[rownames(da.cotinine$table),"logFC"], 
+                                            p.value = da.univ$table[rownames(da.cotinine$table),"FDR"], 
+                                            OTU = rownames(da.cotinine$table)
+                                          )
+# Filter for significant smokers vs non-smokers OTUs
+edger.smoker_secondhand_crude<-edger.smoker_secondhand_crude[edger.smoker_secondhand_crude$p.value<0.05,]
+
+corr <- cor.test(edger.smoker_secondhand_crude$SHS, edger.smoker_secondhand_crude$S_NS,use="pairwise.complete.obs")
 ```
 
 ```{r edger_cotinine_univ_filter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
-ggplot(edger.smoker_secondhand) + 
+ggplot(edger.smoker_secondhand_crude) + 
   theme_bw() +
   xlab("Crude Smokers vs. Non-smokers") +
-  ylab("Crude Cotinine Levels") +
+  ylab("Crude Cotinine Levels (ng/ml)") +
   geom_text(aes(1,-0.3,label = sprintf("p-value: %s\ncor: %s",signif(corr$p.value,2),signif(corr$estimate,2))),size = 5) +
-  geom_point(aes(smokers, secondhand, color=pvalue <= 0.05), size=3) +
+  geom_point(aes(S_NS, SHS, color=p.value <= 0.05), size=3) +
   scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
-  geom_smooth(aes(smokers, secondhand), method=lm, se = FALSE,color="red") +
+  geom_smooth(aes(S_NS, SHS), method=lm, se = FALSE,color="red") +
   theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 13),
         strip.text = element_text(size = 13),
         axis.title = element_text(size = 15))
@@ -622,15 +636,19 @@ ggplot(edger.smoker_secondhand) +
 
 ### Secondhand vs Cigarette/Never: All OTUs
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
+# Get crude edgeR results for model built with continuous cotinin without filtering for FDR.
+da.cotinine <- get_edgeR_results(~ COTININE, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, method = "BH")
 da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, filtering = TRUE, method = "BH")
+da.univ <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, method = "BH", filtering = TRUE)
 da.univ <- da.univ[sort(da.univ %>% rownames),]
 
-edger.smoker_secondhand <- data.frame(smokers = da.univ$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table$logFC, pvalue = da.univ$table[rownames(da.cotinine$table),"FDR"])
-
-
-corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
+#P-value is taken from the crude smokers vs non-smokers
+edger.smoker_secondhand <- data.frame(S_NS = da.univ$table[rownames(da.cotinine$table),"logFC"], 
+                                            SHS = da.cotinine$table[rownames(da.cotinine$table),"logFC"], 
+                                            p.value = da.univ$table[rownames(da.cotinine$table),"FDR"], 
+                                            OTU = rownames(da.cotinine$table)
+                                    )
+corr <- cor.test(edger.smoker_secondhand$SHS, edger.smoker_secondhand$S_NS,use="pairwise.complete.obs")
 ```
 
 ```{r edger_cotinine_univ_nofilter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
@@ -639,47 +657,80 @@ ggplot(edger.smoker_secondhand) +
   xlab("Crude Smokers vs. Non-smokers") +
   ylab("Crude Cotinine Levels") +
   geom_text(aes(1,-0.3,label = sprintf("p-value: %s\ncor: %s",signif(corr$p.value,2),signif(corr$estimate,2))),size = 5) +
-  geom_point(aes(smokers, secondhand, color=pvalue <= 0.05), size=3) +
+  geom_point(aes(S_NS, SHS, color=p.value <= 0.05), size=3) +
   scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
-  geom_smooth(aes(smokers, secondhand), method=lm, se = FALSE,color="red") +
+  geom_smooth(aes(S_NS, SHS), method=lm, se = FALSE,color="red") +
   theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 13),
         strip.text = element_text(size = 13),
         axis.title = element_text(size = 15))
 ```
 
-### Multivariate Secondhand vs Multivariate Cigarette/Never: only significant OTUs
+### Adjusted Secondhand vs Adjusted Cigarette/Never: only significant OTUs
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 da.cotinine <- get_edgeR_results(~ COTININE + AGEGRP4C + EDU3CAT, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, filtering = TRUE, method = "BH")
 da.cotinine <- da.cotinine[sort(da.cotinine %>% rownames),]
-da.multiv <- get_edgeR_results(~ smokingstatus + AGEGRP4C + EDU3CAT, coef = 2, alph = 2, filtering = TRUE)
-# da.multiv <- get_edgeR_results(~ smokingstatus + AGEGRP4C + EDU3CAT, coef = 2, alph = 2, filtering = TRUE)
-da.multiv <- da.multiv[sort(da.multiv %>% rownames),]
+da.adj <- get_edgeR_results(~ smokingstatus + AGEGRP4C + EDU3CAT, coef = 2, alph = 2, filtering = TRUE)
+da.adj <- da.adj[sort(da.adj %>% rownames),]
 
-edger.smoker_secondhand <- data.frame(smokers = da.multiv$table[rownames(da.cotinine$table),"logFC"], secondhand = da.cotinine$table[rownames(da.cotinine$table),"logFC"], pvalue = da.multiv$table[rownames(da.cotinine$table),"FDR"])
-edger.smoker_secondhand<-edger.smoker_secondhand[edger.smoker_secondhand$pvalue<0.05,]
+edger.smoker_secondhand_adj <- data.frame(S_NS = da.adj$table[rownames(da.cotinine$table),"logFC"],
+                                          SHS = da.cotinine$table[rownames(da.cotinine$table),"logFC"],
+                                          p.value = da.adj$table[rownames(da.cotinine$table),"FDR"],
+                                          OTU = rownames(da.cotinine$table)
+                                        )
 
-corr <- cor.test(edger.smoker_secondhand$secondhand, edger.smoker_secondhand$smokers,use="pairwise.complete.obs")
+edger.smoker_secondhand_adj<-edger.smoker_secondhand_adj[edger.smoker_secondhand_adj$p.value<0.05,]
+
+corr <- cor.test(edger.smoker_secondhand_adj$SHS, edger.smoker_secondhand_adj$S_NS,use="pairwise.complete.obs")
 ```
 
 ```{r edger_cotinine_multiv_filter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
-ggplot(edger.smoker_secondhand) + 
+ggplot(edger.smoker_secondhand_adj) + 
   theme_bw() +
-  xlab("Multivariate Smokers vs. Non-smokers") +
-  ylab("Multivariate Cotinine Levels") +
+  xlab("Adjusted Smokers vs. Non-smokers") +
+  ylab("Adjusted Cotinine Levels") +
   geom_text(aes(1,-0.3,label = sprintf("p-value: %s\ncor: %s",signif(corr$p.value,2),signif(corr$estimate,2))),size = 5) +
-  geom_point(aes(smokers, secondhand, color=pvalue <= 0.05), size=3) +
+  geom_point(aes(S_NS, SHS, color=p.value <= 0.05), size=3) +
   scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
-  geom_smooth(aes(smokers, secondhand), method=lm, se = FALSE,color="red") +
+  geom_smooth(aes(S_NS, SHS), method=lm, se = FALSE,color="red") +
   theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 13),
         strip.text = element_text(size = 13),
         axis.title = element_text(size = 15))
 ```
 
-### Alternative smokers vs Never smoker: univariate
+### Adjusted Secondhand vs Adjusted Cigarette/Never. OTUs are selected from the crude model
+```{r}
+da.adj <- get_edgeR_results(~ smokingstatus + AGEGRP4C + EDU3CAT, coef = 2, alph = 2)
+da.adj <- da.adj[sort(da.adj %>% rownames),]
+da.cotinine_adj <- get_edgeR_results(~ COTININE + AGEGRP4C + EDU3CAT, pseq = subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand")), alph = 2, method = "BH")
+da.cotinine_adj <- da.cotinine_adj[sort(da.cotinine_adj %>% rownames),]
+
+edger.smoker_secondhand_adj <- data.frame(S_NS = da.adj$table[edger.smoker_secondhand_crude$OTU,"logFC"],
+                                          SHS = da.cotinine_adj$table[edger.smoker_secondhand_crude$OTU,"logFC"],
+                                          p.value_sns = da.adj$table[edger.smoker_secondhand_crude$OTU,"FDR"], 
+                                          p.value_cot = da.cotinine_adj$table[edger.smoker_secondhand_crude$OTU,"FDR"],
+                                          OTU =  edger.smoker_secondhand_crude$OTU
+                                        )
+
+dim(edger.smoker_secondhand_adj)
+```
+
+```{r edger_cotinine_multiv_filter, echo=FALSE, fig.width=6.5, message=FALSE, warning=FALSE}
+ggplot(edger.smoker_secondhand_adj) + 
+  theme_bw() +
+  xlab("Adjusted Smokers vs. Non-smokers") +
+  ylab("Adjusted Cotinine Levels") +
+  geom_text(aes(1,-0.3,label = sprintf("p-value: %s\ncor: %s",signif(corr$p.value,2),signif(corr$estimate,2))),size = 5) +
+  geom_point(aes(S_NS, SHS, color=p.value <= 0.05), size=3) +
+  scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
+  geom_smooth(aes(S_NS, SHS), method=lm, se = FALSE,color="red") +
+  theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 13),
+        strip.text = element_text(size = 13),
+        axis.title = element_text(size = 15))
+```
+
+### Alternative smokers vs Never smoker: crude
 ```{r edgeR_alternative, echo=FALSE, fig.width=6.5}
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
-da.univ <- get_edgeR_results(~ smokingstatus, coef = 4, alph = 2, filtering = FALSE, method = "BH")
-da.univ <- da.univ[sort(da.univ %>% rownames),]
 plot_edgeR(~ smokingstatus, pseq = NYC_HANES, coef=4, alph = 0.05, filtering = TRUE, method = "BH", color = "Phylum", sortby = "Phylum",invisbl = FALSE)
 ```
 
