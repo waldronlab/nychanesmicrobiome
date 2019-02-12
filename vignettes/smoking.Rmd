@@ -139,7 +139,7 @@ alphadiv.melted <-
 ggplot(alphadiv.melted, aes(smokingstatus,value)) +
   geom_boxplot(aes(fill=smokingstatus))+
   facet_grid(variable ~., scales = "free", switch = 'y') +
-  scale_x_discrete(labels = c("Cigarette\nsmokers","Never\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke"))+
+  scale_x_discrete(labels = c("Never\nsmokers","Cigarette\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke"))+
   scale_y_continuous(position = 'right') +
   scale_fill_manual(values = scale_palette) +
   guides(colour="none") +
@@ -171,7 +171,7 @@ ggplot(metadata, aes(smokingstatus, COTININE, fill = smokingstatus)) +
   stat_boxplot() +
   scale_fill_manual(values = scale_palette) + 
   theme_bw() +
-  scale_x_discrete(labels = c("Cigarette\nsmokers","Never\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke")) +
+  scale_x_discrete(labels = c("Never\nsmokers","Cigarette\nsmokers", "Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke")) +
   xlab('Reported smoking status') +
   ylab('Serum Cotinine (ng/ml)') +
   guides(fill = FALSE) +
@@ -416,6 +416,7 @@ res.tax <-
 res.maxfold <-
   tapply(res.tax$log2FoldChange, res.tax$Genus, function(x)
     max(x))
+
 res.maxfold <- sort(res.maxfold, T)
 # res.tax["New.ReferenceOTU179","Genus"] <- res.tax["New.ReferenceOTU179","Phylum"] %>% as.character
 res.tax$Genus <-
