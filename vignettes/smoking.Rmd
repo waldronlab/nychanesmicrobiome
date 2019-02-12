@@ -73,38 +73,62 @@ table1 <- tableone::CreateTableOne(vars = variablesToLook,
                                    includeNA = TRUE,
                                    test = FALSE)
 
-alternative_habits <-metadata[metadata$smokingstatus == 'Alternative smoker',c('E_CIGARETTES','HOOKAH_PIPE','CIGARS_CIGARILLOS')] %>% dplyr::mutate_all(dplyr::funs(as.numeric)) %>% colSums(na.rm = TRUE)
+alternative_habits <-
+  metadata[metadata$smokingstatus == 'Alternative smoker', c('E_CIGARETTES', 'HOOKAH_PIPE', 'CIGARS_CIGARILLOS')] %>%
+  dplyr::mutate_all(dplyr::funs(as.numeric)) %>% 
+  colSums(na.rm = TRUE)
 
 x <- print(table1, explain = TRUE, printToggle = FALSE,nonnormal = c('COTININE'))
 knitr::kable(x)
 ```
 
 ```{r Build taxonomy objects, include=FALSE}
-NYC_HANES.genus <- tax_glom(NYC_HANES,taxrank = "Genus")
-NYC_HANES.genus.relab <- transform_sample_counts(NYC_HANES.genus, function(x) x/sum(x))
-NYC_HANES.relab <- transform_sample_counts(NYC_HANES, function(x) x/sum(x))
+NYC_HANES.genus <- tax_glom(NYC_HANES, taxrank = "Genus")
+NYC_HANES.genus.relab <-
+  transform_sample_counts(NYC_HANES.genus, function(x)
+    x / sum(x))
+NYC_HANES.relab <-
+  transform_sample_counts(NYC_HANES, function(x)
+    x / sum(x))
 
-NYC_HANES.genus.relab <- merge_taxa(NYC_HANES.genus, 
-                                    taxa_names(filter_taxa(NYC_HANES.genus.relab, function(x) mean(x) < 2e-4, T)))
-tax_table(NYC_HANES.genus.relab)[is.na(tax_table(NYC_HANES.genus.relab)[,"Genus"]),"Genus"] <- "Other"
-NYC_HANES.genus.relab <- tax_glom(transform_sample_counts(NYC_HANES.genus.relab, function(x) x/sum(x)),taxrank = "Genus")
+NYC_HANES.genus.relab <- merge_taxa(NYC_HANES.genus,
+                                    taxa_names(filter_taxa(NYC_HANES.genus.relab, function(x)
+                                      mean(x) < 2e-4, TRUE)))
+tax_table(NYC_HANES.genus.relab)[is.na(tax_table(NYC_HANES.genus.relab)[, "Genus"]), "Genus"] <-
+  "Other"
+NYC_HANES.genus.relab <-
+  tax_glom(transform_sample_counts(NYC_HANES.genus.relab, function(x)
+    x / sum(x)),
+    taxrank = "Genus")
 
-NYC_HANES.phylum <- tax_glom(NYC_HANES,taxrank = "Phylum")
-NYC_HANES.phylum.relab <- transform_sample_counts(NYC_HANES.phylum, function(x) x/sum(x))
+NYC_HANES.phylum <- tax_glom(NYC_HANES, taxrank = "Phylum")
+NYC_HANES.phylum.relab <-
+  transform_sample_counts(NYC_HANES.phylum, function(x)
+    x / sum(x))
 ```
 
 # Microbial composition (8 most abundant genera)
 ```{r genus_plot, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
-plot(plot_abundance(NYC_HANES, top_n = 8, prop="total",taxrank = "Genus") + labs(x="296 oral rinse samples"))
+plot(
+  plot_abundance(
+    NYC_HANES,
+    top_n = 8,
+    prop = "total",
+    taxrank = "Genus"
+  ) + labs(x = "296 oral rinse samples")
+)
 ```
 
 # Alpha diversity
 ```{r Alpha diversity calculation, include=FALSE}
-alphadiv <- estimate_richness(NYC_HANES, measures = c("Observed","Chao1","Shannon", "Simpson"))[,-3]
+alphadiv <-
+  estimate_richness(NYC_HANES,
+                    measures = c("Observed", "Chao1", "Shannon", "Simpson"))[, -3]
 alphadiv <- cbind(alphadiv, sample_data(NYC_HANES)$smokingstatus)
 colnames(alphadiv)[5] <- c("smokingstatus")
 
-alphadiv.melted <- reshape2::melt(alphadiv, id.vars = c("smokingstatus"))
+alphadiv.melted <-
+  reshape2::melt(alphadiv, id.vars = c("smokingstatus"))
 ```
 
 ```{r Alpha diversity boxplots, echo=FALSE, fig.width=6}
@@ -127,13 +151,13 @@ ggplot(alphadiv.melted, aes(smokingstatus,value)) +
 ```
 
 ```{r ANOVA on alpha diversity measures, cache=FALSE}
-aovSMOKINGSTATUS<-aov(Shannon ~ smokingstatus,alphadiv)
+aovSMOKINGSTATUS <- aov(Shannon ~ smokingstatus, alphadiv)
 summary(aovSMOKINGSTATUS)
 
-aovSMOKINGSTATUS<-aov(Observed ~ smokingstatus,alphadiv)
+aovSMOKINGSTATUS <- aov(Observed ~ smokingstatus, alphadiv)
 summary(aovSMOKINGSTATUS)
 
-aovSMOKINGSTATUS<-aov(Chao1 ~ smokingstatus,alphadiv)
+aovSMOKINGSTATUS <- aov(Chao1 ~ smokingstatus, alphadiv)
 summary(aovSMOKINGSTATUS)
 ```
 
@@ -159,91 +183,138 @@ ggplot(metadata, aes(smokingstatus, COTININE, fill = smokingstatus)) +
 # Beta Diversity
 ```{r Calculate distances, warning=FALSE, include=FALSE}
 distwu <- phyloseq::distance(NYC_HANES, "wunifrac")
-ordwu <-  ordinate(NYC_HANES, method = "MDS", distance = distwu, weighted = TRUE)
+ordwu <- ordinate(NYC_HANES,
+           method = "MDS",
+           distance = distwu,
+           weighted = TRUE)
 
-smoker.wu.data <- plot_ordination(NYC_HANES, ordwu,justDF = TRUE) %>% dplyr::arrange()
+smoker.wu.data <- plot_ordination(NYC_HANES, ordwu, justDF = TRUE) %>% dplyr::arrange()
 
-smoker.wu.data$weeksquit <- as.numeric(smoker.wu.data[,"SMQ_4"]) * as.numeric(smoker.wu.data[,"SMQ_4UNIT"])
-smoker.wu.data[!smoker.wu.data$SMOKER3CAT %in% "Former smoker","weeksquit"] <- 5
+smoker.wu.data$weeksquit <-
+  as.numeric(smoker.wu.data[, "SMQ_4"]) * as.numeric(smoker.wu.data[, "SMQ_4UNIT"])
+smoker.wu.data[!smoker.wu.data$SMOKER3CAT %in% "Former smoker", "weeksquit"] <- 5
 smoker.wu.data$CIGARETTES[is.na(smoker.wu.data$CIGARETTES)] <- "No"
 
 smoker.wu.data %<>% bind_cols(otu_table(NYC_HANES.phylum.relab) %>% t %>% data.frame)
-proteobacteria <- tax_table(NYC_HANES.phylum.relab)[tax_table(NYC_HANES.phylum.relab)[,"Phylum"]=="Proteobacteria"] %>% rownames
+proteobacteria <-
+  tax_table(NYC_HANES.phylum.relab)[tax_table(NYC_HANES.phylum.relab)[, "Phylum"] ==
+                                      "Proteobacteria"] %>% rownames
 ```
 
 ## Cigarette smokers vs Never smokers
 ```{r pcoa_smokers_neversmoker, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
-plot(ggplot(subset(smoker.wu.data,smokingstatus  %in% c("Cigarette","Never smoker"))) + 
-  geom_point(aes(Axis.1,Axis.2, color=smokingstatus), size=3, alpha=0.7) +
-  stat_ellipse(aes(Axis.1, Axis.2, color=smokingstatus), type = 't') +
-  theme_bw() +
-  theme(axis.text = element_text(size = 13),
-        axis.title = element_text(size = 12),
-        legend.text = element_text(size=12),
-        legend.title = element_text(size=12),
-        legend.position = 'bottom') + 
-  scale_color_manual(name='Smoking status', values = scale_palette[1:2]) +
-  scale_y_continuous(limits = c(-0.14,0.13)) +
-  scale_x_continuous(limits = c(-0.18,0.20))
+plot(
+  ggplot(subset(
+    smoker.wu.data,
+    smokingstatus  %in% c("Cigarette", "Never smoker")
+  )) +
+    geom_point(
+      aes(Axis.1, Axis.2, color = smokingstatus),
+      size = 3,
+      alpha = 0.7
+    ) +
+    stat_ellipse(aes(Axis.1, Axis.2, color = smokingstatus), type = 't') +
+    theme_bw() +
+    theme(
+      axis.text = element_text(size = 13),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.title = element_text(size = 12),
+      legend.position = 'bottom'
+    ) +
+    scale_color_manual(name = 'Smoking status', values = scale_palette[1:2]) +
+    scale_y_continuous(limits = c(-0.14, 0.13)) +
+    scale_x_continuous(limits = c(-0.18, 0.20))
 )
 ```
 
 ## Cigarette smokers + Never smokers + Former smokers
 ```{r pcoa_threecat, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
-plot(ggplot(subset(smoker.wu.data,smokingstatus  %in% c("Cigarette","Never smoker","Former smoker"))) + 
-  geom_point(aes(Axis.1,Axis.2, color=smokingstatus, size=weeksquit), alpha=0.7) +
-  theme_bw() +
-  theme(axis.text = element_text(size = 13),
-        axis.title = element_text(size = 12),
-        legend.text = element_text(size=12),
-        legend.title = element_text(size=12),
-        legend.position = 'bottom',
-        legend.box = 'vertical',
-        legend.margin = margin(-10,0,0,0)
-        ) + 
-  scale_color_manual(name='Smoking status', values = scale_palette[c(1:3)]) +
-  scale_y_continuous(limits = c(-0.14,0.13)) +
-  scale_x_continuous(limits = c(-0.18,0.20)) +
-  scale_size(range = c(2,8))
+plot(
+  ggplot(subset(
+    smoker.wu.data,
+    smokingstatus  %in% c("Cigarette", "Never smoker", "Former smoker")
+  )) +
+    geom_point(
+      aes(Axis.1, Axis.2, color = smokingstatus, size = weeksquit),
+      alpha = 0.7
+    ) +
+    theme_bw() +
+    theme(
+      axis.text = element_text(size = 13),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 12),
+      legend.title = element_text(size = 12),
+      legend.position = 'bottom',
+      legend.box = 'vertical',
+      legend.margin = margin(-10, 0, 0, 0)
+    ) +
+    scale_color_manual(name = 'Smoking status', values = scale_palette[c(1:3)]) +
+    scale_y_continuous(limits = c(-0.14, 0.13)) +
+    scale_x_continuous(limits = c(-0.18, 0.20)) +
+    scale_size(range = c(2, 8))
 )
 ```
 
 ## Cigarette smokers + Never smokers + Former smokers + Secondhand smokers
 ```{r pcoa_fourcat, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
-plot(ggplot(subset(smoker.wu.data,smokingstatus  %in% c("Cigarette","Never smoker","Former smoker","Secondhand"))) + 
-  geom_point(aes(Axis.1,Axis.2, color=smokingstatus, size=weeksquit), alpha=0.7) +
-  theme_bw() +
-  scale_color_manual(name='Smoking status', values = scale_palette[c(1:4)]) +
-  scale_y_continuous(limits = c(-0.14,0.13)) +
-  scale_x_continuous(limits = c(-0.18,0.20)) +
-  scale_size(range = c(2,8))
+plot(
+  ggplot(subset(
+    smoker.wu.data,
+    smokingstatus  %in% c("Cigarette", "Never smoker", "Former smoker", "Secondhand")
+  )) +
+    geom_point(
+      aes(Axis.1, Axis.2, color = smokingstatus, size = weeksquit),
+      alpha = 0.7
+    ) +
+    theme_bw() +
+    scale_color_manual(name = 'Smoking status', values = scale_palette[c(1:4)]) +
+    scale_y_continuous(limits = c(-0.14, 0.13)) +
+    scale_x_continuous(limits = c(-0.18, 0.20)) +
+    scale_size(range = c(2, 8))
 )
 ```
 
 ## All smoking statuses
 ```{r pcoa_all, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
-plot(ggplot(smoker.wu.data) + 
-  geom_point(aes(Axis.1,Axis.2, color=smokingstatus, size=weeksquit), alpha=0.7) +
-  theme_bw() +
-  scale_color_manual(name='Smoking status', values = scale_palette) +
-  scale_y_continuous(limits = c(-0.14,0.13)) +
-  scale_x_continuous(limits = c(-0.18,0.20)) +
-  scale_size(range = c(2,8))
+plot(
+  ggplot(smoker.wu.data) +
+    geom_point(
+      aes(Axis.1, Axis.2, color = smokingstatus, size = weeksquit),
+      alpha = 0.7
+    ) +
+    theme_bw() +
+    scale_color_manual(name = 'Smoking status', values = scale_palette) +
+    scale_y_continuous(limits = c(-0.14, 0.13)) +
+    scale_x_continuous(limits = c(-0.18, 0.20)) +
+    scale_size(range = c(2, 8))
 )
 ```
 
 ## Discrete serum blood Cotinine levels
 ```{r pcoa_cotinine, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
-plot(ggplot() +
-  xlab("Axis.1")+
-  ylab("Axis.2")+
-  theme_bw() +
-  geom_point(data=smoker.wu.data[smoker.wu.data$COTININE<1,], aes(Axis.1, Axis.2), size=3, alpha=1, color="black") +
-  geom_point(data=smoker.wu.data[smoker.wu.data$COTININE>1,], aes(Axis.1, Axis.2, color=COTININE), size=3, alpha=0.7) +
-  scale_y_continuous(limits = c(-0.14,0.13)) +
-  scale_x_continuous(limits = c(-0.18,0.20)) +
-  scale_color_gradient(low = "blue", high = "red", name = "Cotinine (ng/ml)") +
-  scale_size(range = c(2,8))
+plot(
+  ggplot() +
+    xlab("Axis.1") +
+    ylab("Axis.2") +
+    theme_bw() +
+    geom_point(
+      data = smoker.wu.data[smoker.wu.data$COTININE < 1, ],
+      aes(Axis.1, Axis.2),
+      size = 3,
+      alpha = 1,
+      color = "black"
+    ) +
+    geom_point(
+      data = smoker.wu.data[smoker.wu.data$COTININE > 1, ],
+      aes(Axis.1, Axis.2, color = COTININE),
+      size = 3,
+      alpha = 0.7
+    ) +
+    scale_y_continuous(limits = c(-0.14, 0.13)) +
+    scale_x_continuous(limits = c(-0.18, 0.20)) +
+    scale_color_gradient(low = "blue", high = "red", name = "Cotinine (ng/ml)") +
+    scale_size(range = c(2, 8))
 )
 ```
 
@@ -252,29 +323,50 @@ plot(ggplot() +
 metadata <- as(sample_data(NYC_HANES), "data.frame")
 permanova.res <- data.frame()
 
-for(s in combn(levels(metadata$smokingstatus),2, simplify = FALSE)){
-  metadata_2cat <- metadata[metadata$smokingstatus %in% s,]
-  distwu_2cat <- phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
-  permanova <- vegan::adonis(formula = distwu_2cat ~ smokingstatus +  OHQ_3 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW, data = metadata_2cat)
-  permanova.res %<>% bind_rows(data.frame(contrast = stringr::str_c(s, collapse = " vs "), r2=permanova$aov.tab[1,5],pvalue=permanova$aov.tab[1,6])) %>% arrange(pvalue)
+for (s in combn(levels(metadata$smokingstatus), 2, simplify = FALSE)) {
+  metadata_2cat <- metadata[metadata$smokingstatus %in% s, ]
+  distwu_2cat <-
+    phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
+  permanova <-
+    vegan::adonis(
+      formula = distwu_2cat ~ smokingstatus +  OHQ_3 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW,
+      data = metadata_2cat
+    )
+  permanova.res %<>% bind_rows(
+    data.frame(
+      contrast = stringr::str_c(s, collapse = " vs "),
+      r2 = permanova$aov.tab[1, 5],
+      pvalue = permanova$aov.tab[1, 6]
+    )
+  ) %>% arrange(pvalue)
 }
-  knitr::kable(permanova.res)
+knitr::kable(permanova.res)
 ```
 
 ```{r cotinine permanova, echo=FALSE, message=FALSE, warning=FALSE}
-s <- c("Cigarette","Never smoker")
+s <- c("Cigarette", "Never smoker")
 metadata <- as(sample_data(NYC_HANES), 'data.frame')
-metadata_2cat <- metadata[metadata$smokingstatus %in% s,]
-distwu_2cat <- phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
-permanova <- vegan::adonis(data = metadata_2cat, distwu_2cat ~ COTININE)
+metadata_2cat <- metadata[metadata$smokingstatus %in% s, ]
+distwu_2cat <-
+  phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
+permanova <-
+  vegan::adonis(data = metadata_2cat, distwu_2cat ~ COTININE)
 permanova
 ```
 
 #### Three categories
 ```{r permanova3cat, echo=FALSE, message=FALSE, warning=FALSE}
-metadata_3cat <- metadata[metadata$smokingstatus %in% c("Cigarette","Never smoker", "Former smoker"),]
-distwu_3cat <- phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% c("Cigarette","Never smoker", "Former smoker")), "wunifrac")
-vegan::adonis(distwu_3cat ~ smokingstatus + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW, metadata_3cat)
+metadata_3cat <-
+  metadata[metadata$smokingstatus %in% c("Cigarette", "Never smoker", "Former smoker"), ]
+distwu_3cat <-
+  phyloseq::distance(subset_samples(
+    NYC_HANES,
+    smokingstatus %in% c("Cigarette", "Never smoker", "Former smoker")
+  ), "wunifrac")
+vegan::adonis(
+  distwu_3cat ~ smokingstatus + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW,
+  metadata_3cat
+)
 ```
 
 #### All categories
@@ -304,89 +396,155 @@ DESeq2 is presented as sensitivity analysis. Main results are calculated by edge
 ### Current smokers vs. never smokers crude
 ```{r current/never, message=FALSE, include=FALSE}
 threshold <- 0.05
-dds <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus), parallel = TRUE)
+dds <-
+  DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus),
+                parallel = TRUE)
 
 ## here "Current smoker" is the numerator, "Never smoker" is the denominator in fold-change calculation
-res.crude <- DESeq2::results(dds, contrast = c("smokingstatus","Cigarette","Never smoker"))
-res.filtered <- res[!is.na(res.crude$padj),]
-res.filtered <- res.filtered[res.filtered$padj < threshold,]
+res.crude <-
+  DESeq2::results(dds, contrast = c("smokingstatus", "Cigarette", "Never smoker"))
+res.filtered <- res[!is.na(res.crude$padj), ]
+res.filtered <- res.filtered[res.filtered$padj < threshold, ]
 
-## Create a table with the taxonomy of the significant OTUs 
-res.tax <- cbind(as.data.frame(res.filtered), as.matrix(tax_table(NYC_HANES)[rownames(res.filtered),]))
-res.maxfold <- tapply(res.tax$log2FoldChange, res.tax$Genus, function(x) max(x))
+## Create a table with the taxonomy of the significant OTUs
+res.tax <-
+  cbind(as.data.frame(res.filtered), as.matrix(tax_table(NYC_HANES)[rownames(res.filtered), ]))
+res.maxfold <-
+  tapply(res.tax$log2FoldChange, res.tax$Genus, function(x)
+    max(x))
 res.maxfold <- sort(res.maxfold, T)
 # res.tax["New.ReferenceOTU179","Genus"] <- res.tax["New.ReferenceOTU179","Phylum"] %>% as.character
-res.tax$Genus <- factor(as.character(res.tax$Genus), levels = names(res.maxfold))
+res.tax$Genus <-
+  factor(as.character(res.tax$Genus), levels = names(res.maxfold))
 res.tax$type <- "Current/Never"
-res.tax <- res.tax[order(res.tax$log2FoldChange),] 
+res.tax <- res.tax[order(res.tax$log2FoldChange), ] 
 ```
 
 ```{r deseq2_crude, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
-plot(ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
-  geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
-  geom_point(size=3, aes(color = X2)) + 
-  facet_grid(Phylum ~ ., scales = "free", space = "free_y",switch = "y",as.table = TRUE)+
-  theme_bw() +
-  scale_y_discrete(position = "right") +
-  scale_color_discrete(name = "Oxygen requirement")+
-  # guides(color=FALSE) + 
-  theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 11),
-        strip.text = element_text(size = 9),
-        axis.title = element_text(size = 9),
-        axis.title.y = element_blank(),
-        strip.background = element_rect(colour = "transparent", fill = "transparent"),
-        strip.text.y = element_text(angle = 180)
-  )
+plot(
+  ggplot(right_join(biosis, res.tax, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) +
+    geom_vline(
+      xintercept = 0.0,
+      color = "gray",
+      size = 0.5
+    ) +
+    geom_point(size = 3, aes(color = X2)) +
+    facet_grid(
+      Phylum ~ .,
+      scales = "free",
+      space = "free_y",
+      switch = "y",
+      as.table = TRUE
+    ) +
+    theme_bw() +
+    scale_y_discrete(position = "right") +
+    scale_color_discrete(name = "Oxygen requirement") +
+    # guides(color=FALSE) +
+    theme(
+      axis.text = element_text(
+        hjust = 0,
+        vjust = 0.5,
+        size = 11
+      ),
+      strip.text = element_text(size = 9),
+      axis.title = element_text(size = 9),
+      axis.title.y = element_blank(),
+      strip.background = element_rect(colour = "transparent", fill = "transparent"),
+      strip.text.y = element_text(angle = 180)
+    )
 )
 ```
 
 ### Current smokers vs. never smokers adjusting for confounding
 ```{r current/never confounding, message=FALSE, include=FALSE}
 ## Counfounders added in the design's formula
-dds.conf <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ AGEGRP4C + GENDER + RACE + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus) ,parallel = TRUE,  quiet=TRUE)
+dds.conf <-
+  DESeq2::DESeq(
+    phyloseq_to_deseq2(
+      NYC_HANES,
+      design = ~ AGEGRP4C + GENDER + RACE + SR_ACTIVE + EDU3CAT + DBTS_NEW + smokingstatus
+    ) ,
+    parallel = TRUE,
+    quiet = TRUE
+  )
 ##Use two out of three categories in the contrast variable
-res.conf <- DESeq2::results(dds.conf, contrast = c("smokingstatus","Cigarette","Never smoker"), pAdjustMethod = "BH")
-res.filtered.conf <- res.conf[!is.na(res.conf$padj),]
-res.filtered.conf <- res.filtered.conf[res.filtered.conf$padj < threshold,]
+res.conf <-
+  DESeq2::results(
+    dds.conf,
+    contrast = c("smokingstatus", "Cigarette", "Never smoker"),
+    pAdjustMethod = "BH"
+  )
+res.filtered.conf <- res.conf[!is.na(res.conf$padj), ]
+res.filtered.conf <-
+  res.filtered.conf[res.filtered.conf$padj < threshold, ]
 
 #Create result table with DA OTUs
-tt <- tax_table(NYC_HANES)[rownames(res.filtered.conf),]
-if(all.equal(rownames(res.filtered.conf), rownames(tt))){
-  res.tax.conf <- cbind(as.data.frame(res.filtered.conf), as.matrix(tt))
-}else{
+tt <- tax_table(NYC_HANES)[rownames(res.filtered.conf), ]
+if (all.equal(rownames(res.filtered.conf), rownames(tt))) {
+  res.tax.conf <-
+    cbind(as.data.frame(res.filtered.conf), as.matrix(tt))
+} else{
   stop("rowname mismatch for res.tax.conf")
 }
-res.tax.conf <- res.tax.conf[!is.na(res.tax.conf$Family),]
-res.maxfold.conf <- tapply(res.tax.conf$log2FoldChange, res.tax.conf$Genus, function(x) max(x))
+res.tax.conf <- res.tax.conf[!is.na(res.tax.conf$Family), ]
+res.maxfold.conf <-
+  tapply(res.tax.conf$log2FoldChange, res.tax.conf$Genus, function(x)
+    max(x))
 res.maxfold.conf <- sort(res.maxfold.conf, T)
 res.tax.conf$Genus <- as.character(res.tax.conf$Genus)
-res.tax.conf["New.ReferenceOTU148","Genus"] <- "Neisseriaceae"
-res.tax.conf["New.ReferenceOTU137","Genus"] <- "Neisseriaceae"
-res.tax.conf["New.ReferenceOTU192","Genus"] <- "Pasteurellaceae"
+res.tax.conf["New.ReferenceOTU148", "Genus"] <- "Neisseriaceae"
+res.tax.conf["New.ReferenceOTU137", "Genus"] <- "Neisseriaceae"
+res.tax.conf["New.ReferenceOTU192", "Genus"] <- "Pasteurellaceae"
 
-res.tax.conf$Genus <- factor(as.character(res.tax.conf$Genus), levels = names(res.maxfold.conf))
+res.tax.conf$Genus <-
+  factor(as.character(res.tax.conf$Genus), levels = names(res.maxfold.conf))
 res.tax.conf$type <- "Cigarette/Never + conf"
 
 ```
 
 ```{r deseq2_adjusted, echo=FALSE,message=FALSE, warning=FALSE, fig.width=6.5}
-plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2FoldChange, X1)) + 
-  geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
-  geom_point(size=3, aes(color = X2)) + 
-  facet_grid(Phylum~., scales = "free", space = "free_y",switch = "y",as.table = TRUE) +
-  theme_bw() +
-  # guides(color=FALSE) + 
-  facet_grid(Phylum~., scales = "free", space = "free_y",switch = "y",as.table = TRUE)+
-  scale_y_discrete( position = "right") +
- scale_color_discrete(name = "Oxygen requirement")+
-  # guides(color=FALSE) + 
-  theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 11),
-        strip.text = element_text(size = 9),
-        axis.title = element_text(size = 9),
-        axis.title.y = element_blank(),
-        strip.background = element_rect(colour = "transparent", fill = "transparent"),
-        strip.text.y = element_text(angle = 180)
-  )
+plot(
+  ggplot(
+    right_join(biosis, res.tax.conf, by = c("X1" = "Genus")),
+    aes(log2FoldChange, X1)
+  ) +
+    geom_vline(
+      xintercept = 0.0,
+      color = "gray",
+      size = 0.5
+    ) +
+    geom_point(size = 3, aes(color = X2)) +
+    facet_grid(
+      Phylum ~ .,
+      scales = "free",
+      space = "free_y",
+      switch = "y",
+      as.table = TRUE
+    ) +
+    theme_bw() +
+    # guides(color=FALSE) +
+    facet_grid(
+      Phylum ~ .,
+      scales = "free",
+      space = "free_y",
+      switch = "y",
+      as.table = TRUE
+    ) +
+    scale_y_discrete(position = "right") +
+    scale_color_discrete(name = "Oxygen requirement") +
+    # guides(color=FALSE) +
+    theme(
+      axis.text = element_text(
+        hjust = 0,
+        vjust = 0.5,
+        size = 11
+      ),
+      strip.text = element_text(size = 9),
+      axis.title = element_text(size = 9),
+      axis.title.y = element_blank(),
+      strip.background = element_rect(colour = "transparent", fill = "transparent"),
+      strip.text.y = element_text(angle = 180)
+    )
 )
 ```
 
@@ -394,63 +552,96 @@ plot(ggplot(right_join(biosis, res.tax.conf, by = c("X1" = "Genus")), aes(log2Fo
 ```{r, message=FALSE, warning=FALSE, include=FALSE}
 #Take log2fc from crude and adjusted analysis. The pvalue and FDR are from the crude analysis
 stopifnot(all.equal(rownames(res.crude), rownames(res.conf)))
-compardat <- data.frame(crude = res.crude$log2FoldChange, 
-                        pvalue = res.crude$pvalue, 
-                        padj = res.crude$padj, 
-                        adjusted = res.conf$log2FoldChange)
+compardat <- data.frame(
+  crude = res.crude$log2FoldChange,
+  pvalue = res.crude$pvalue,
+  padj = res.crude$padj,
+  adjusted = res.conf$log2FoldChange
+)
 #Set pvalues with NAs at 1
 compardat$padj[is.na(compardat$padj)] <- 1
 ```
 
 ```{r deseq2_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
 ggplot(compardat) +
-  geom_point(aes(crude, adjusted, color=padj < 0.05), size=2) +
+  geom_point(aes(crude, adjusted, color = padj < 0.05), size = 2) +
   geom_abline() +
-  scale_colour_manual(values = setNames(c('black','grey'),c(TRUE, FALSE)), guide=FALSE) +
-#  scale_x_continuous(limits = c(-2,2))+
-#  scale_y_continuous(limits = c(-2,2))+
+  scale_colour_manual(values = setNames(c('black', 'grey'), c(TRUE, FALSE)), guide =
+                        FALSE) +
+  #  scale_x_continuous(limits = c(-2,2))+
+  #  scale_y_continuous(limits = c(-2,2))+
   theme_bw() +
-  theme( axis.text = element_text(hjust = 0, vjust=0.5, size = 17),
-         strip.text = element_text(size = 13),
-         axis.title = element_text(size = 15))
+  theme(
+    axis.text = element_text(
+      hjust = 0,
+      vjust = 0.5,
+      size = 17
+    ),
+    strip.text = element_text(size = 13),
+    axis.title = element_text(size = 15)
+  )
 ```
 
 ### Secondhand vs Cigarette/Never
 ```{r cotinine, message=FALSE, cache=FALSE, include=FALSE, warning=FALSE, cache=FALSE}
-#Extract all samples marked as SHS 
-NYC_HANEScot <- subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand"))
+#Extract all samples marked as SHS
+NYC_HANEScot <-
+  subset_samples(NYC_HANES, smokingstatus %in% c("Secondhand"))
 #NYC_HANEScot <- subset_samples(NYC_HANEScot, smokingstatus %in% c("Secondhand") & COTININE < 3)
 #Build DESeq2 object using continuous cotinine variable
-ddscot <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANEScot, design = ~ COTININE), parallel = TRUE)
+ddscot <-
+  DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANEScot, design = ~ COTININE),
+                parallel = TRUE)
 rescot.crude <- DESeq2::results(ddscot, alpha = 0.05)
 
-#Select OTUs significant in the crude smokers vs non-smokers model. 
+#Select OTUs significant in the crude smokers vs non-smokers model.
 #Correlation is calculated by taking the log2FC from the crude smokers vs non-smokers model and the crude cotinine model
-(corr <- cor.test(res.crude$log2FoldChange[res.crude$padj < 0.05], 
-                 rescot.crude$log2FoldChange[res.crude$padj < 0.05], 
-                 use="pairwise.complete.obs"))
+(
+  corr <- cor.test(
+    res.crude$log2FoldChange[res.crude$padj < 0.05],
+    rescot.crude$log2FoldChange[res.crude$padj < 0.05],
+    use = "pairwise.complete.obs"
+  )
+)
 
-if(identical(all.equal(rownames(rescot.crude), rownames(res.crude)), TRUE)){
-  cor.data <- data.frame(smoks=res.crude$log2FoldChange[res.crude$padj < 0.05], 
-                         cot=rescot.crude$log2FoldChange[res.crude$padj < 0.05])
-}else{
+if (identical(all.equal(rownames(rescot.crude), rownames(res.crude)), TRUE)) {
+  cor.data <-
+    data.frame(smoks = res.crude$log2FoldChange[res.crude$padj < 0.05],
+               cot = rescot.crude$log2FoldChange[res.crude$padj < 0.05])
+} else{
   stop("mismatch in cotenine/smoking rownames")
 }
 ```
 
 ```{r deseq2_cotinine_univ, echo=FALSE, message=FALSE, warning=FALSE,  fig.width=6.5}
-plot(ggplot(cor.data,aes(smoks, cot)) + 
-  theme_bw() +
-  xlab("Crude Smokers vs. Non-smokers") +
-  ylab("Crude Cotinine Levels") +
-  geom_text(aes(0.5,0.25,label = stringr::str_c('p-value: ',signif(corr$p.value,2), '\nCorr: ', signif(corr$estimate,2))), color="black") +
-  geom_point(size=4, color = '#e41a1c') +
-  geom_smooth(method=lm, se = FALSE,color="red") +
-#  scale_x_continuous(limits = c(-1.7,1.7)) +
-#  scale_y_continuous(limits = c(-0.17,0.3)) +
-  theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 13),
-        strip.text = element_text(size = 13),
-        axis.title = element_text(size = 15))
+plot(
+  ggplot(cor.data, aes(smoks, cot)) +
+    theme_bw() +
+    xlab("Crude Smokers vs. Non-smokers") +
+    ylab("Crude Cotinine Levels") +
+    geom_text(aes(
+      0.5,
+      0.25,
+      label = stringr::str_c(
+        'p-value: ',
+        signif(corr$p.value, 2),
+        '\nCorr: ',
+        signif(corr$estimate, 2)
+      )
+    ), color = "black") +
+    geom_point(size = 4, color = '#e41a1c') +
+    geom_smooth(method = lm, se = FALSE, color = "red") +
+    #  scale_x_continuous(limits = c(-1.7,1.7)) +
+    #  scale_y_continuous(limits = c(-0.17,0.3)) +
+    theme(
+      axis.text = element_text(
+        hjust = 0,
+        vjust = 0.5,
+        size = 13
+      ),
+      strip.text = element_text(size = 13),
+      axis.title = element_text(size = 15)
+    )
 )
 ```
 
@@ -459,165 +650,304 @@ plot(ggplot(cor.data,aes(smoks, cot)) +
 
 ```{r edgeR crude differential analysis, echo=FALSE, fig.height=6, fig.width=8}
 #Set Never smokers as first level
-sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
-dasmoking.crude <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 0.05, method = "BH")
-dasmoking.crude$table <- dasmoking.crude$table[sort(dasmoking.crude$table %>% rownames),]
+sample_data(NYC_HANES)$smokingstatus <-
+  relevel(sample_data(NYC_HANES)$smokingstatus, "Never smoker")
+dasmoking.crude <-
+  get_edgeR_results( ~ smokingstatus,
+                     coef = 2,
+                     alph = 0.05,
+                     method = "BH")
+dasmoking.crude$table <-
+  dasmoking.crude$table[sort(dasmoking.crude$table %>% rownames), ]
 ```
 
 ```{r edgeR_univ, echo=FALSE, fig.width=6.5}
-dasmoking.crude$table$Genus <- as.character(dasmoking.crude$table$Genus)
-dasmoking.crude$table[c("New.CleanUp.ReferenceOTU8965","New.ReferenceOTU179"), 'Genus'] <- 'uncultured'
-dasmoking.crude$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
-dasmoking.crude$table$Genus[is.na(dasmoking.crude$table$Genus)] <- 'unclassified'
-ord <- order(dasmoking.crude$table[['Phylum']], dasmoking.crude$table$logFC, decreasing=TRUE)
-dasmoking.crude$table$Genus <- factor(dasmoking.crude$table$Genus, levels = unique(dasmoking.crude$table$Genus[ord]))
-phyla_colors <- c('#00B2FFFF','#FF9900FF','#FF0000FF','#0DFF00FF','#00FF9FFF','#A600FFFF','#B9FF00FF','#FF00ACFF','#0006FFFF','#ababab')
+dasmoking.crude$table$Genus <-
+  as.character(dasmoking.crude$table$Genus)
+dasmoking.crude$table[c("New.CleanUp.ReferenceOTU8965", "New.ReferenceOTU179"), 'Genus'] <-
+  'uncultured'
+dasmoking.crude$table['New.ReferenceOTU72', 'Genus'] <-
+  'Family XIII'
+dasmoking.crude$table$Genus[is.na(dasmoking.crude$table$Genus)] <-
+  'unclassified'
+ord <-
+  order(dasmoking.crude$table[['Phylum']],
+        dasmoking.crude$table$logFC,
+        decreasing = TRUE)
+dasmoking.crude$table$Genus <-
+  factor(dasmoking.crude$table$Genus,
+         levels = unique(dasmoking.crude$table$Genus[ord]))
+phyla_colors <-
+  c(
+    '#00B2FFFF',
+    '#FF9900FF',
+    '#FF0000FF',
+    '#0DFF00FF',
+    '#00FF9FFF',
+    '#A600FFFF',
+    '#B9FF00FF',
+    '#FF00ACFF',
+    '#0006FFFF',
+    '#ababab'
+  )
 
 
 p <-
-  ggplot2::ggplot(dasmoking.crude$table, ggplot2::aes(x=logFC, y=Genus, color=Phylum)) +
-  ggplot2::geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
-  ggplot2::geom_point(size=3) +
-  ggplot2::guides(color=ggplot2::guide_legend(title='Phylum')) +
+  ggplot2::ggplot(dasmoking.crude$table,
+                  ggplot2::aes(x = logFC, y = Genus, color = Phylum)) +
+  ggplot2::geom_vline(xintercept = 0.0,
+                      color = "gray",
+                      size = 0.5) +
+  ggplot2::geom_point(size = 3) +
+  ggplot2::guides(color = ggplot2::guide_legend(title = 'Phylum')) +
   ggplot2::theme_light() +
-  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, hjust = 0, vjust=0.5),
-        axis.text.y = ggplot2::element_text(face = "italic"),
-        axis.text = ggplot2::element_text(size=12),
-        legend.text = ggplot2::element_text(size=12),
-        legend.box.margin=margin(-27,0,-27,-27),
-        legend.title = ggplot2::element_text(size=14),
-        title = ggplot2::element_text(size=15),
-        plot.title = ggplot2::element_text(margin = ggplot2::margin(b=26))) +
-  ggplot2::scale_y_discrete(position="right") +
-  ggplot2::labs(x="Log2-fold change") +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+      angle = -90,
+      hjust = 0,
+      vjust = 0.5
+    ),
+    axis.text.y = ggplot2::element_text(face = "italic"),
+    axis.text = ggplot2::element_text(size = 12),
+    legend.text = ggplot2::element_text(size = 12),
+    legend.box.margin = margin(-27, 0, -27, -27),
+    legend.title = ggplot2::element_text(size = 14),
+    title = ggplot2::element_text(size = 15),
+    plot.title = ggplot2::element_text(margin = ggplot2::margin(b =
+                                                                  26))
+  ) +
+  ggplot2::scale_y_discrete(position = "right") +
+  ggplot2::labs(x = "Log2-fold change") +
   ggplot2::xlim(-3.1, 3.1) +
-  ggplot2::ggtitle('Cigarette vs. Never smoker') + 
-  ggplot2::scale_color_manual(values=phyla_colors)
+  ggplot2::ggtitle('Cigarette vs. Never smoker') +
+  ggplot2::scale_color_manual(values = phyla_colors)
 
-p1 <- p +  
-  ggplot2::annotation_custom(grob = grid::textGrob('Lower in smokers'),  xmin = -1.8, xmax = -1.8, ymin = 29.7, ymax = 29.7) +
-  ggplot2::annotation_custom(grob = grid::textGrob('Higher in smokers'),  xmin = 1.8, xmax = 1.8, ymin = 29.7, ymax = 29.7)
+p1 <- p +
+  ggplot2::annotation_custom(
+    grob = grid::textGrob('Lower in smokers'),
+    xmin = -1.8,
+    xmax = -1.8,
+    ymin = 29.7,
+    ymax = 29.7
+  ) +
+  ggplot2::annotation_custom(
+    grob = grid::textGrob('Higher in smokers'),
+    xmin = 1.8,
+    xmax = 1.8,
+    ymin = 29.7,
+    ymax = 29.7
+  )
 
 gg_table <- ggplot_gtable(ggplot_build(p1))
-gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
+gg_table$layout$clip[gg_table$layout$name == "panel"] <- "off"
 grid::grid.draw(gg_table)
 ```
 
 ## Cigarette smoker vs Never smoker: crude phylum level
 ```{r edgeR_crude_phylum,echo=FALSE, fig.width=6.5}
-sample_data(NYC_HANES.phylum)$smokingstatus <- relevel(sample_data(NYC_HANES.phylum)$smokingstatus,"Never smoker")
-DGELRT <- get_edgeR_results(~ smokingstatus, pseq = NYC_HANES.phylum, coef = 2, alph = 0.05, method = "BH")
+sample_data(NYC_HANES.phylum)$smokingstatus <-
+  relevel(sample_data(NYC_HANES.phylum)$smokingstatus, "Never smoker")
+DGELRT <-
+  get_edgeR_results(
+    ~ smokingstatus,
+    pseq = NYC_HANES.phylum,
+    coef = 2,
+    alph = 0.05,
+    method = "BH"
+  )
 
 p <-
-  ggplot2::ggplot(DGELRT$table, ggplot2::aes(x=logFC, y=Phylum, color=Phylum)) +
-  ggplot2::geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
-  ggplot2::geom_point(size=3) +
-  ggplot2::guides(color=ggplot2::guide_legend(title='Phylum')) +
+  ggplot2::ggplot(DGELRT$table, ggplot2::aes(x = logFC, y = Phylum, color =
+                                               Phylum)) +
+  ggplot2::geom_vline(xintercept = 0.0,
+                      color = "gray",
+                      size = 0.5) +
+  ggplot2::geom_point(size = 3) +
+  ggplot2::guides(color = ggplot2::guide_legend(title = 'Phylum')) +
   ggplot2::theme_light() +
-  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, hjust = 0, vjust=0.5),
-                 axis.text.y = ggplot2::element_text(face = "italic"),
-                 axis.text = ggplot2::element_text(size=12),
-                 legend.text = ggplot2::element_text(size=12),
-                 legend.box.margin=margin(-27,0,-27,-27),
-                 legend.title = ggplot2::element_text(size=14),
-                 title = ggplot2::element_text(size=15),
-                 plot.title = ggplot2::element_text(margin = ggplot2::margin(b=26))) +
-  ggplot2::scale_y_discrete(position="right") +
-  ggplot2::labs(x="Log2-fold change") +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+      angle = -90,
+      hjust = 0,
+      vjust = 0.5
+    ),
+    axis.text.y = ggplot2::element_text(face = "italic"),
+    axis.text = ggplot2::element_text(size = 12),
+    legend.text = ggplot2::element_text(size = 12),
+    legend.box.margin = margin(-27, 0, -27, -27),
+    legend.title = ggplot2::element_text(size = 14),
+    title = ggplot2::element_text(size = 15),
+    plot.title = ggplot2::element_text(margin = ggplot2::margin(b =
+                                                                  26))
+  ) +
+  ggplot2::scale_y_discrete(position = "right") +
+  ggplot2::labs(x = "Log2-fold change") +
   ggplot2::xlim(-3.1, 3.1) +
-  ggplot2::ggtitle('Cigarette vs. Never smoker') + 
-  ggplot2::scale_color_manual(values=phyla_colors)
+  ggplot2::ggtitle('Cigarette vs. Never smoker') +
+  ggplot2::scale_color_manual(values = phyla_colors)
 
-p1 <- p + 
-  ggplot2::annotation_custom(grob = grid::textGrob('Lower in smokers', gp=grid::gpar(col="black", fontsize=11)),  xmin = -1.8, xmax = -1.8, ymin = 5.8, ymax = 5.8) +
-  ggplot2::annotation_custom(grob = grid::textGrob('Higher in smokers', gp=grid::gpar(col="black", fontsize=11)),  xmin = 1.8, xmax = 1.8, ymin = 5.8, ymax = 5.8)
+p1 <- p +
+  ggplot2::annotation_custom(
+    grob = grid::textGrob('Lower in smokers', gp = grid::gpar(col = "black", fontsize =
+                                                                11)),
+    xmin = -1.8,
+    xmax = -1.8,
+    ymin = 5.8,
+    ymax = 5.8
+  ) +
+  ggplot2::annotation_custom(
+    grob = grid::textGrob('Higher in smokers', gp = grid::gpar(col = "black", fontsize =
+                                                                 11)),
+    xmin = 1.8,
+    xmax = 1.8,
+    ymin = 5.8,
+    ymax = 5.8
+  )
 
 
 gg_table <- ggplot_gtable(ggplot_build(p1))
-gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
+gg_table$layout$clip[gg_table$layout$name == "panel"] <- "off"
 grid::grid.draw(gg_table)
 ```
 
 ### Cigarette smoker vs Never smoker: Adjusted
 ```{r edgeR adjusted differential analysis, echo=FALSE}
 #Adjusted model with race, sex, age, physical activity, education level, diabetes status (based on serum HbA1c) and self-reported gum disease
-da.adj <- get_edgeR_results(~ smokingstatus + AGEGRP4C + GENDER + RACE + SR_ACTIVE + EDU3CAT + DBTS_NEW, coef = 2, alph = 0.05)
-da.adj <- da.adj[sort(da.adj %>% rownames),]
+da.adj <-
+  get_edgeR_results(
+    ~ smokingstatus + AGEGRP4C + GENDER + RACE + SR_ACTIVE + EDU3CAT + DBTS_NEW,
+    coef = 2,
+    alph = 0.05
+  )
+da.adj <- da.adj[sort(da.adj %>% rownames), ]
 ```
 
 ```{r edgeR_multiv, echo=FALSE, fig.width=6.5}
 da.adj$table$Genus <- as.character(da.adj$table$Genus)
-da.adj$table['New.ReferenceOTU72','Genus'] <- 'Family XIII'
+da.adj$table['New.ReferenceOTU72', 'Genus'] <- 'Family XIII'
 da.adj$table$Genus[is.na(da.adj$table$Genus)] <- 'unclassified'
-ord <- order(da.adj$table[['Phylum']], da.adj$table$logFC, decreasing=TRUE)
-da.adj$table$Genus <- factor(da.adj$table$Genus, levels = unique(da.adj$table$Genus[ord]))
-phyla_colors <- c('#FF9900FF','#0DFF00FF','#00FF9FFF','#A600FFFF','#FF00ACFF')
+ord <-
+  order(da.adj$table[['Phylum']], da.adj$table$logFC, decreasing = TRUE)
+da.adj$table$Genus <-
+  factor(da.adj$table$Genus, levels = unique(da.adj$table$Genus[ord]))
+phyla_colors <-
+  c('#FF9900FF',
+    '#0DFF00FF',
+    '#00FF9FFF',
+    '#A600FFFF',
+    '#FF00ACFF')
 
 
 p <-
-  ggplot2::ggplot(da.adj$table, ggplot2::aes(x=logFC, y=Genus, color=Phylum)) +
-  ggplot2::geom_vline(xintercept = 0.0, color = "gray", size = 0.5) +
-  ggplot2::geom_point(size=3) +
-  ggplot2::guides(color=ggplot2::guide_legend(title='Phylum')) +
+  ggplot2::ggplot(da.adj$table, ggplot2::aes(x = logFC, y = Genus, color =
+                                               Phylum)) +
+  ggplot2::geom_vline(xintercept = 0.0,
+                      color = "gray",
+                      size = 0.5) +
+  ggplot2::geom_point(size = 3) +
+  ggplot2::guides(color = ggplot2::guide_legend(title = 'Phylum')) +
   ggplot2::theme_light() +
-  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, hjust = 0, vjust=0.5),
-        # axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t=25)),
-        axis.text.y = ggplot2::element_text(face = "italic"),
-        axis.text = ggplot2::element_text(size=12),
-        legend.text = ggplot2::element_text(size=12),
-        legend.title = ggplot2::element_text(size=14),
-        title = ggplot2::element_text(size=15),
-        plot.title = ggplot2::element_text(margin = ggplot2::margin(b=26))) +
-  ggplot2::scale_y_discrete(position="right") +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(
+      angle = -90,
+      hjust = 0,
+      vjust = 0.5
+    ),
+    # axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t=25)),
+    axis.text.y = ggplot2::element_text(face = "italic"),
+    axis.text = ggplot2::element_text(size = 12),
+    legend.text = ggplot2::element_text(size = 12),
+    legend.title = ggplot2::element_text(size = 14),
+    title = ggplot2::element_text(size = 15),
+    plot.title = ggplot2::element_text(margin = ggplot2::margin(b =
+                                                                  26))
+  ) +
+  ggplot2::scale_y_discrete(position = "right") +
   ggplot2::xlim(-2.5, 2.5) +
-  ggplot2::labs(x="Log2-fold change") +
-  ggplot2::ggtitle('Cigarette vs. Never smoker') + 
-  ggplot2::scale_color_manual(values=phyla_colors)
+  ggplot2::labs(x = "Log2-fold change") +
+  ggplot2::ggtitle('Cigarette vs. Never smoker') +
+  ggplot2::scale_color_manual(values = phyla_colors)
 p
 
-p1 <- p +  
-  ggplot2::annotation_custom(grob = grid::textGrob('Lower in smokers'),  xmin = -1.4, xmax = -1.4, ymin = 17.2, ymax = 17.2) +
-  ggplot2::annotation_custom(grob = grid::textGrob('Higher in smokers'),  xmin = 1.4, xmax = 1.4, ymin = 17.2, ymax = 17.2)
+p1 <- p +
+  ggplot2::annotation_custom(
+    grob = grid::textGrob('Lower in smokers'),
+    xmin = -1.4,
+    xmax = -1.4,
+    ymin = 17.2,
+    ymax = 17.2
+  ) +
+  ggplot2::annotation_custom(
+    grob = grid::textGrob('Higher in smokers'),
+    xmin = 1.4,
+    xmax = 1.4,
+    ymin = 17.2,
+    ymax = 17.2
+  )
 
 gg_table <- ggplot_gtable(ggplot_build(p1))
-gg_table$layout$clip[gg_table$layout$name=="panel"] <- "off"
+gg_table$layout$clip[gg_table$layout$name == "panel"] <- "off"
 grid::grid.draw(gg_table)
 
 ```
 
 ### Plot crude vs adjusted beta coefficients
 ```{r Beta coeff crude vs adjusted, message=FALSE, warning=FALSE, include=FALSE}
-#Get crude edgeR results without filtering for FDR 
-dasmoking.crude <- get_edgeR_results(~ smokingstatus, coef = 2, alph = 2, method = "BH")
-dasmoking.crude$table <- dasmoking.crude$table[sort(dasmoking.crude$table %>% rownames),]
-#Get adjusted edgeR results without filtering for FDR 
-da.adj <- get_edgeR_results(~ smokingstatus +RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + OHQ_3, coef = 2, alph = 2)
-da.adj <- da.adj[sort(da.adj %>% rownames),]
+#Get crude edgeR results without filtering for FDR
+dasmoking.crude <-
+  get_edgeR_results( ~ smokingstatus,
+                     coef = 2,
+                     alph = 2,
+                     method = "BH")
+dasmoking.crude$table <-
+  dasmoking.crude$table[sort(dasmoking.crude$table %>% rownames), ]
+#Get adjusted edgeR results without filtering for FDR
+da.adj <-
+  get_edgeR_results(
+    ~ smokingstatus + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW + OHQ_3,
+    coef = 2,
+    alph = 2
+  )
+da.adj <- da.adj[sort(da.adj %>% rownames), ]
 
 # Build result table by taking log2FC from crude and adjusted models and FDR from the crude one.
-if(identical(all.equal(rownames(da.adj), rownames(dasmoking.crude)), TRUE)){
-  compardat <- data.frame(crude = dasmoking.crude$table$logFC, 
-                        padj = dasmoking.crude$table$FDR, 
-                        adjusted = da.adj$table$logFC)
-}else{
+if (identical(all.equal(rownames(da.adj), rownames(dasmoking.crude)), TRUE)) {
+  compardat <- data.frame(
+    crude = dasmoking.crude$table$logFC,
+    padj = dasmoking.crude$table$FDR,
+    adjusted = da.adj$table$logFC
+  )
+} else{
   stop("rownames mismatch between da.adj and dasmoking.crude")
 }
 ```
 
 ```{r edgeR_univ_vs_multiv, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.5}
-plot(ggplot(compardat) +
-  geom_abline(color="black", alpha=0.5, size=1) +
-  geom_point(aes(crude, adjusted, alpha=padj < 0.05), size=2) +
-  scale_colour_manual(values = setNames(c('grey','black'),c(FALSE, TRUE)), guide=FALSE) +
-  scale_x_continuous(limits = c(-2,2))+
-  scale_y_continuous(limits = c(-2,2))+
-  xlab("Crude log2 fold change") +
-  ylab("Adjusted log2 fold change") +
-  theme_bw() +
-  theme(axis.text = element_text(hjust = 0, vjust=0.5, size = 15),
-         strip.text = element_text(size = 13),
-         axis.title = element_text(size = 14),
-         legend.position = 'bottom')
+plot(
+  ggplot(compardat) +
+    geom_abline(
+      color = "black",
+      alpha = 0.5,
+      size = 1
+    ) +
+    geom_point(aes(crude, adjusted, alpha = padj < 0.05), size = 2) +
+    scale_colour_manual(values = setNames(c('grey', 'black'), c(FALSE, TRUE)), guide =
+                          FALSE) +
+    scale_x_continuous(limits = c(-2, 2)) +
+    scale_y_continuous(limits = c(-2, 2)) +
+    xlab("Crude log2 fold change") +
+    ylab("Adjusted log2 fold change") +
+    theme_bw() +
+    theme(
+      axis.text = element_text(
+        hjust = 0,
+        vjust = 0.5,
+        size = 15
+      ),
+      strip.text = element_text(size = 13),
+      axis.title = element_text(size = 14),
+      legend.position = 'bottom'
+    )
 )
 ```
 
@@ -629,8 +959,8 @@ mergeResults <- function(obj.smoking, obj.cotenine) {
   intersect.filters <-
     intersect(rownames(obj.smoking), rownames(obj.cotenine))
   intersect.filters <- sort(intersect.filters)
-  obj.smoking <- obj.smoking[intersect.filters,]
-  obj.cotenine <- obj.cotenine[intersect.filters,]
+  obj.smoking <- obj.smoking[intersect.filters, ]
+  obj.cotenine <- obj.cotenine[intersect.filters, ]
   stopifnot(all.equal(rownames(obj.smoking), rownames(obj.cotenine)))
   ##
   res <-
