@@ -111,7 +111,7 @@ alphadiv.melted <- reshape2::melt(alphadiv, id.vars = c("smokingstatus"))
 ggplot(alphadiv.melted, aes(smokingstatus,value)) +
   geom_boxplot(aes(fill=smokingstatus))+
   facet_grid(variable ~., scales = "free", switch = 'y') +
-  scale_x_discrete(labels = c("Cigarette\nsmokers","Never\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke"))+
+  scale_x_discrete(labels = c("Never\nsmokers","Cigarette\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke"))+
   scale_y_continuous(position = 'right') +
   scale_fill_manual(values = scale_palette) +
   guides(colour="none") +
@@ -143,7 +143,7 @@ ggplot(metadata, aes(smokingstatus, COTININE, fill = smokingstatus)) +
   stat_boxplot() +
   scale_fill_manual(values = scale_palette) + 
   theme_bw() +
-  scale_x_discrete(labels = c("Cigarette\nsmokers","Never\nsmokers","Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke")) +
+  scale_x_discrete(labels = c("Never\nsmokers","Cigarette\nsmokers", "Former\nsmokers","Alternative\nsmokers","Secondhand\nsmoke")) +
   xlab('Reported smoking status') +
   ylab('Serum Cotinine (ng/ml)') +
   guides(fill = FALSE) +
@@ -308,7 +308,7 @@ dds <- DESeq2::DESeq(phyloseq_to_deseq2(NYC_HANES, design = ~ smokingstatus), pa
 
 ## here "Current smoker" is the numerator, "Never smoker" is the denominator in fold-change calculation
 res.crude <- DESeq2::results(dds, contrast = c("smokingstatus","Cigarette","Never smoker"))
-res.filtered <- res[!is.na(res.crude$padj),]
+res.filtered <- res.crude[!is.na(res.crude$padj),]
 res.filtered <- res.filtered[res.filtered$padj < threshold,]
 
 ## Create a table with the taxonomy of the significant OTUs 
