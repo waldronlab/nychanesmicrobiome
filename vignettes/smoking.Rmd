@@ -18,7 +18,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(
 	cache = TRUE,
 	echo = FALSE,
@@ -27,7 +27,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup, include=FALSE}
+```{r loading, include=FALSE}
 suppressPackageStartupMessages({
   library(nychanesmicrobiome)
   library(dplyr)
@@ -135,7 +135,7 @@ alphadiv.melted <-
   reshape2::melt(alphadiv, id.vars = c("smokingstatus"))
 ```
 
-```{r Alpha diversity boxplots, echo=FALSE, fig.width=6}
+```{r Alpha diversity boxplots, echo=FALSE}
 ggplot(alphadiv.melted, aes(smokingstatus,value)) +
   geom_boxplot(aes(fill=smokingstatus))+
   facet_grid(variable ~., scales = "free", switch = 'y') +
@@ -977,6 +977,7 @@ mergeResults <- function(obj.smoking, obj.cotinine) {
       FDR_cotinine = obj.cotinine$table$FDR,
       OTU = rownames(obj.smoking$table)
     )
+  res <- cbind(res, obj.smoking[, c("Phylum", "Class", "Order", "Family", "Genus", "Species")])
   return(res)
 }
 ```
@@ -1206,6 +1207,19 @@ p <-
     FDRcutoff = 1
   )
 p
+```
+
+### Write supplemental file
+
+```{r}
+stopifnot(all.equal(rownames(edger.smoker_secondhand_adjusted), 
+                    rownames(edger.smoker_secondhand_crude)))
+crude <- edger.smoker_secondhand_crude[, 1:4]
+adjusted <- edger.smoker_secondhand_adjusted[, 1:4]
+colnames(crude) <- paste0(colnames(crude), "_crude")
+colnames(adjusted) <- paste0(colnames(adjusted), "_adjusted")
+sfile <- cbind(edger.smoker_secondhand_crude[, -1:-4], crude, adjusted)
+readr::write_excel_csv(sfile, path="SupplementalFile1.csv")
 ```
 
 
