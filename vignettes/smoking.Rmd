@@ -27,31 +27,37 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r loading, include=FALSE}
-suppressPackageStartupMessages({
-  library(nychanesmicrobiome)
-  library(dplyr)
-  })
+```{r loading, include=FALSE, message=FALSE}
+library(nychanesmicrobiome)
+library(dplyr)
 
 scale_palette <- c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00")
-theme_transparent <- ggplot2::theme(axis.title = ggplot2::element_text(colour = "white"),
-                                    axis.text = ggplot2::element_text(colour = "white"),
-                                    title = ggplot2::element_text(colour = "white"),
-                                    legend.text = ggplot2::element_text(colour = "white"),
-                                    axis.ticks = ggplot2::element_line(colour = "white"),
-                                    panel.border = ggplot2::element_rect(colour = "white"),
-                                    panel.background = ggplot2::element_rect(fill = "transparent",colour = NA),
-                                    plot.background =  ggplot2::element_rect(fill = "transparent",colour = NA),
-                                    legend.background = ggplot2::element_rect(fill = "transparent",colour = NA),
-                                    legend.key = ggplot2::element_rect(fill = "transparent",colour = NA),
-                                    panel.grid = ggplot2::element_blank())
-
+theme_transparent <- ggplot2::theme(
+  axis.title = ggplot2::element_text(colour = "white"),
+  axis.text = ggplot2::element_text(colour = "white"),
+  title = ggplot2::element_text(colour = "white"),
+  legend.text = ggplot2::element_text(colour = "white"),
+  axis.ticks = ggplot2::element_line(colour = "white"),
+  panel.border = ggplot2::element_rect(colour = "white"),
+  panel.background = ggplot2::element_rect(fill = "transparent",colour = NA),
+  plot.background =  ggplot2::element_rect(fill = "transparent",colour = NA),
+  legend.background = ggplot2::element_rect(fill = "transparent",colour = NA),
+  legend.key = ggplot2::element_rect(fill = "transparent",colour = NA),
+  panel.grid = ggplot2::element_blank()
+)
 ```
 
 ```{r Data loading, message=FALSE, warning=FALSE, include=FALSE}
-NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
+NYC_HANES <- loadQiimeData() %>% 
+  annotateFactors()
 # Extract alternative smokers who also smoke cigarettes and remove them
-alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
+alt_smokers_cigarettes <- NYC_HANES |> 
+  sample_data() |> 
+  data.frame() |> 
+  dplyr::filter(smokingstatus == 'Alternative smoker') |> 
+  dplyr::filter(CIGARETTES == 'Yes') |> 
+  dplyr::select(Burklab_ID) |> 
+  t()
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 
@@ -326,21 +332,20 @@ plot(
 ```{r permanova, echo=FALSE, message=FALSE, warning=FALSE, cache=F}
 metadata <- as(sample_data(NYC_HANES), "data.frame")
 permanova.res <- data.frame()
-
 for (s in combn(levels(metadata$smokingstatus), 2, simplify = FALSE)) {
   metadata_2cat <- metadata[metadata$smokingstatus %in% s, ]
-  distwu_2cat <-
-    phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
-  permanova <-
-    vegan::adonis(
+  distwu_2cat <- phyloseq::distance(
+    subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac"
+  )
+  permanova <- vegan::adonis2(
       formula = distwu_2cat ~ smokingstatus +  OHQ_3 + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW,
       data = metadata_2cat
-    )
+  )
   permanova.res %<>% bind_rows(
     data.frame(
       contrast = stringr::str_c(s, collapse = " vs "),
-      r2 = permanova$aov.tab[1, 5],
-      pvalue = permanova$aov.tab[1, 6]
+      r2 = permanova[1, 'R2'],
+      pvalue = permanova[1, 'Pr(>F)']
     )
   ) %>% arrange(pvalue)
 }
@@ -354,7 +359,7 @@ metadata_2cat <- metadata[metadata$smokingstatus %in% s, ]
 distwu_2cat <-
   phyloseq::distance(subset_samples(NYC_HANES, smokingstatus %in% s), "wunifrac")
 permanova <-
-  vegan::adonis(data = metadata_2cat, distwu_2cat ~ COTININE)
+  vegan::adonis2(data = metadata_2cat, distwu_2cat ~ COTININE)
 permanova
 ```
 
@@ -367,7 +372,7 @@ distwu_3cat <-
     NYC_HANES,
     smokingstatus %in% c("Cigarette", "Never smoker", "Former smoker")
   ), "wunifrac")
-vegan::adonis(
+vegan::adonis2(
   distwu_3cat ~ smokingstatus + RACE + GENDER + AGEGRP4C + SR_ACTIVE + EDU3CAT + DBTS_NEW,
   metadata_3cat
 )
@@ -375,7 +380,7 @@ vegan::adonis(
 
 #### All categories
 ```{r permanovaallcat, echo=FALSE, message=FALSE, warning=FALSE}
-vegan::adonis(distwu ~ smokingstatus, metadata)
+vegan::adonis2(distwu ~ smokingstatus, metadata)
 ```
 
 # Differential analysis
@@ -1277,7 +1282,10 @@ epitools::epitab(x)
 ## Cigarette smokers vs Never smokers
 ### GSEA 
 ```{r create GSEA objects, echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE, paged.print=FALSE}
-full_eset <- ExpressionSet(assayData = otu_table(NYC_HANES), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES)))
+full_eset <- ExpressionSet(
+  assayData = microbiome::abundances(NYC_HANES),
+  phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES))
+)
 full_eset$CATCOTININE <- ifelse(full_eset$COTININE < 3,'low','high')
 full_annotated_ds <- tax_table(NYC_HANES) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
 
@@ -1318,7 +1326,8 @@ expr = expr[SummarizedExperiment::rowData(de.sns_eset)$ADJ.PVAL <= 0.05,]
 grp = factor(de.sns_eset$GROUP, labels = c('Never smoker','Cigarette'))
 
 expr <- t(scale(t(expr)))
-expr <- expr[rownames(expr) %in% unlist(sns.gsea.res$gs$aero), ]
+# expr <- expr[rownames(expr) %in% unlist(sns.gsea.res$gs$aero), ]
+expr <- expr[rownames(expr) %in% unlist(sns.gsea.res$gs), ]
 
 coll <- c("#B62A84", "#2AB68C")
 names(coll) <- levels(grp)
@@ -1409,15 +1418,23 @@ topTable(sns.nc.fit)
 ```
 
 ```{r Data reloading, message=FALSE, warning=FALSE, include=FALSE}
-NYC_HANES <- loadQiimeData() %>% annotateFactors(.)
-alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
+NYC_HANES <- loadQiimeData() |> 
+  annotateFactors()
+alt_smokers_cigarettes <- NYC_HANES |> 
+  sample_data() |> 
+  data.frame() |> 
+  dplyr::filter(smokingstatus == 'Alternative smoker') |> 
+  dplyr::filter(CIGARETTES == 'Yes') |>  
+  dplyr::select(Burklab_ID) |> 
+  t()
+
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 
 NYC_HANES.alt <- subset_samples(NYC_HANES, smokingstatus %in% c("Never smoker", "Alternative smoker"))
 levels(sample_data(NYC_HANES.alt)$smokingstatus) <- c('Never','Alternative')
 
-full_eset <- ExpressionSet(assayData = otu_table(NYC_HANES), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES)))
+full_eset <- ExpressionSet(assayData = microbiome::abundances(NYC_HANES), phenoData = new("AnnotatedDataFrame", sample_data(NYC_HANES)))
 full_eset$CATCOTININE <- ifelse(full_eset$COTININE < 3,'low','high')
 full_annotated_ds <- tax_table(NYC_HANES) %>% as.data.frame %>% bind_cols(data.frame(OTU=rownames(tax_table(NYC_HANES)))) %>% filter(Domain != "Unassigned") %>% left_join(biosis, by = c("Genus"="X1"))
 
