@@ -5,11 +5,23 @@
 \alias{plot_abundance_by}
 \title{Area and bar plots of sample-level relative abundance at specified taxonomic levels}
 \usage{
-plot_abundance(pseq, top_n = 8, taxrank = "Phylum", prop_of = "top_n",
-  type = "area", orderby_OTU, PALETTE)
+plot_abundance(
+  pseq,
+  top_n = 8,
+  taxrank = "Phylum",
+  prop_of = "top_n",
+  type = "area",
+  orderby_OTU,
+  PALETTE
+)
 
-plot_abundance_by(pseq, brewerpal = "Set1", by, type = c("area", "bar"),
-  ttle = paste0("Relative phylum abundances by ", by))
+plot_abundance_by(
+  pseq,
+  brewerpal = "Set1",
+  by,
+  type = c("area", "bar"),
+  ttle = paste0("Relative phylum abundances by ", by)
+)
 }
 \arguments{
 \item{pseq}{An object of class \code{phyloseq}}
