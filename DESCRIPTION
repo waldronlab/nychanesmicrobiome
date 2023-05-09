@@ -45,3 +45,4 @@ Collate:
     'get_edgeR_results.R'
     'loadQiimeData.R'
     'prettytable_functions.R'
+URL: http://waldronlab.io/nychanesmicrobiome/
