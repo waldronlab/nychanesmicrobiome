@@ -2,11 +2,19 @@
 % Please edit documentation in R/loadQiimeData.R
 \name{loadQiimeData}
 \alias{loadQiimeData}
-\title{Import NYC HANES-II microbiome data as a \code{phyloseq} object.}
+\title{Import}
 \usage{
-
-  loadQiimeData(metadata = sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2018/01/public_v2_010518.sas7bdat"))
+loadQiimeData()
+}
+\value{
+A phyloseq object.
 }
 \description{
-Import NYC HANES-II microbiome data as a \code{phyloseq} object.
+\code{loadQiimeData} imports NYC HANES-II microbiome data as a 
+\code{phyloseq} object
+}
+\examples{
+
+nychanes <- loadQiimeData()
+
 }

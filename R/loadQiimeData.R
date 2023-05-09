@@ -1,12 +1,33 @@
-#' Import NYC HANES-II microbiome data as a \code{phyloseq} object.
+
+#' Import  
 #' 
+#' \code{loadQiimeData} imports NYC HANES-II microbiome data as a 
+#' \code{phyloseq} object
+#'
+#' @return A phyloseq object.
 #' @export
-loadQiimeData <- function(metadata = sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2018/01/public_v2_010518.sas7bdat")){
-  
-  otu_table <- system.file("extdata","otu_table_mc10_w_tax.biom", package="nychanesmicrobiome", mustWork = TRUE)
-  tree_otu <- system.file("extdata","rep_set.tre", package="nychanesmicrobiome", mustWork = TRUE)
-  rep_set <- system.file("extdata","rep_set.fna", package="nychanesmicrobiome", mustWork = TRUE)
-  
+#'
+#' @examples
+#' 
+#' nychanes <- loadQiimeData()
+#' 
+loadQiimeData <- function() {
+  metadata_fname <- system.file(
+    'extdata', 'public_v2_010518.sas7bdat', package = 'nychanesmicrobiome'
+  )
+  metadata <- sas7bdat::read.sas7bdat(metadata_fname)
+  otu_table <- system.file(
+    "extdata", "otu_table_mc10_w_tax.biom", 
+    package = "nychanesmicrobiome", mustWork = TRUE
+  )
+  tree_otu <- system.file(
+    "extdata", "rep_set.tre", 
+    package = "nychanesmicrobiome", 
+   mustWork = TRUE
+  )
+  rep_set <- system.file(
+    "extdata", "rep_set.fna", package = "nychanesmicrobiome", mustWork = TRUE
+  )
   phylo <- import_biom(BIOMfilename = otu_table, 
                                  treefilename = read_tree(tree_otu), 
                                  refseqfilename = rep_set, 

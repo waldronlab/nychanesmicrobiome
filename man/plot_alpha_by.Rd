@@ -5,8 +5,14 @@
 \alias{plot_beta_by}
 \title{Alpha and beta diversity plots stratified by sample variables}
 \usage{
-plot_alpha_by(pseq, vars, metadata = sample_data(pseq)[, vars],
-  notch = TRUE)
+plot_alpha_by(
+  pseq,
+  vars,
+  metadata = sample_data(pseq)[, vars],
+  notch = TRUE,
+  adjust_formula,
+  alpha_p
+)
 
 plot_beta_by(pseq, vars, dist_mtrx)
 }

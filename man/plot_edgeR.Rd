@@ -4,9 +4,18 @@
 \alias{plot_edgeR}
 \title{Dot plots based on edgeR results for microbiome data}
 \usage{
-plot_edgeR(formla, ttle = NULL, varname = NULL, pseq = NYC_HANES,
-  coef = 2, printIfEmpty = FALSE, invisbl = FALSE, color = "FDR",
-  sortby = NULL, ...)
+plot_edgeR(
+  formla,
+  ttle = NULL,
+  varname = NULL,
+  pseq = NYC_HANES,
+  coef = 2,
+  printIfEmpty = FALSE,
+  invisbl = FALSE,
+  color = "FDR",
+  sortby = NULL,
+  ...
+)
 }
 \arguments{
 \item{formla}{formula. specifies the design matrix used by \code{edgeR::glmFit}.}

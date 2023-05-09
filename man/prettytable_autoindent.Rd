@@ -4,8 +4,14 @@
 \alias{prettytable_autoindent}
 \title{Create an auto-indented table based on tableone::CreateTableOne.}
 \usage{
-prettytable_autoindent(vars, data, nspaces = 6, includeNA = TRUE,
-  nonnormal = NULL, ...)
+prettytable_autoindent(
+  vars,
+  data,
+  nspaces = 6,
+  includeNA = TRUE,
+  nonnormal = NULL,
+  ...
+)
 }
 \arguments{
 \item{vars}{Character vector. Names of variables to summarize}

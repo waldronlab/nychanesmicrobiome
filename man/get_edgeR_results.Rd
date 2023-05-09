@@ -7,17 +7,30 @@
 \alias{get_all_edgeR_models}
 \title{User friendly interface to edgeR for microbiome data}
 \usage{
-get_edgeR_results(formla, pseq = NYC_HANES, method = c("BH", "IHW"),
-  coef = 2, alph = 0.01, filtering = method[1] == "BH",
-  countMinimum = 8, percentMinimumHaveCount = NULL, nMinimumHaveCount = 3,
-  NA.RM = TRUE)
+get_edgeR_results(
+  formla,
+  pseq = NYC_HANES,
+  method = c("BH", "IHW"),
+  coef = 2,
+  alph = 0.01,
+  filtering = method[1] == "BH",
+  countMinimum = 8,
+  percentMinimumHaveCount = NULL,
+  nMinimumHaveCount = 3,
+  NA.RM = TRUE
+)
 
 get_edger_results_all_levels(formla, ...)
 
 edger_list_to_data.frame(list_models)
 
-get_all_edgeR_models(vars, varlabels = vars, adjusted_for,
-  to.data.frame = TRUE, ...)
+get_all_edgeR_models(
+  vars,
+  varlabels = vars,
+  adjusted_for,
+  to.data.frame = TRUE,
+  ...
+)
 }
 \arguments{
 \item{formla}{formula. specifies the design matrix used by \code{edgeR::glmFit}.}
