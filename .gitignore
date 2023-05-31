@@ -2,3 +2,9 @@
 .Rproj.user
 .Rhistory
 docs
+SupplementalFile1.csv
+inst/rmd/NYC-HANES_files/
+inst/rmd/out_img/
+results/
+vignettes/SupplementalFile1.csv
+vignettes/results/
