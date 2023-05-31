@@ -51,7 +51,8 @@ Suggests:
     stringr,
     SummarizedExperiment,
     tidyr,
-    utils
+    utils,
+    R.utils
 VignetteBuilder: knitr
 Collate: 
     'abundance_plots.R'
