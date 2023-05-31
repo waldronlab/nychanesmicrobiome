@@ -40,9 +40,18 @@ Imports:
   gridExtra,
   gtable,
   vegan
-Suggests: knitr,
+Suggests: 
+    knitr,
     rmarkdown,
-    BiocStyle
+    BiocStyle,
+    ComplexHeatmap,
+    limma,
+    microbiome,
+    readr,
+    stringr,
+    SummarizedExperiment,
+    tidyr,
+    utils
 VignetteBuilder: knitr
 Collate: 
     'abundance_plots.R'
