@@ -1301,7 +1301,7 @@ EnrichmentBrowser::configEBrowser("OUTDIR.DEFAULT","./results")
 sns.eset <- full_eset[,full_eset$smokingstatus %in%  c("Cigarette","Never smoker")]
 NYC_HANES.sns <- NYC_HANES %>% subset_samples(., smokingstatus %in% c("Cigarette","Never smoker"))
 sns.eset$GROUP <- ifelse(sns.eset$smokingstatus == "Cigarette",1,0)
-de.sns_eset <- EnrichmentBrowser::deAna(sns.eset, de.method = 'edgeR')
+de.sns_eset <- EnrichmentBrowser::deAna(sns.eset, de.method = 'edgeR', filter.by.expr = FALSE)
 
 design = model.matrix(~smokingstatus, data=data.frame(sample_data(NYC_HANES.sns)))
 
@@ -1367,7 +1367,7 @@ sh_eset$GROUP <- ifelse(sh_eset$COTININE < cotinine_quantiles[[1]], 0,ifelse(sh_
 
 subeset <- sh_eset[,!is.na(sh_eset$GROUP)]
 sh_design = model.matrix(~CATCOTININE, data = data.frame(pData(subeset)))
-de.sh_eset <- EnrichmentBrowser::deAna(subeset, de.method = 'edgeR')
+de.sh_eset <- EnrichmentBrowser::deAna(subeset, de.method = 'edgeR', filter.by.expr = FALSE)
 
 otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.sh_eset), design = sh_design, plot = FALSE)
 SummarizedExperiment::assay(de.sh_eset) <- otu_table.voom$E
@@ -1450,7 +1450,7 @@ NYC_HANES.hookah <- subset_samples(NYC_HANES.alt, ((smokingstatus %in% c("Never"
 
 hookah_eset <- alt_full_eset[,(alt_full_eset$smokingstatus %in% c("Never") | tidyr::replace_na(alt_full_eset$HOOKAH_PIPE == 1, FALSE))]
 write.csv(hookah_eset$smokingstatus, '/tmp/a')
-de.hookah_eset <- EnrichmentBrowser::deAna(hookah_eset, de.method = 'edgeR')
+de.hookah_eset <- EnrichmentBrowser::deAna(hookah_eset, de.method = 'edgeR', filter.by.expr = FALSE)
 
 hookah_design <- model.matrix(~smokingstatus, data = data.frame(pData(hookah_eset)))
 otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.hookah_eset), design = hookah_design , plot = FALSE)
@@ -1480,7 +1480,7 @@ NYC_HANES.ecig <- NYC_HANES.alt %>% subset_samples(., smokingstatus %in% c("Neve
 
 ecig_eset <- alt_full_eset[,(alt_full_eset$smokingstatus %in% c("Never") | tidyr::replace_na(alt_full_eset$E_CIGARETTES == 1, FALSE))]
 
-de.ecig_eset <- EnrichmentBrowser::deAna(ecig_eset, de.method = 'edgeR')
+de.ecig_eset <- EnrichmentBrowser::deAna(ecig_eset, de.method = 'edgeR', filter.by.expr = FALSE)
 
 ecig_design <- model.matrix(~smokingstatus, data = data.frame(pData(ecig_eset)))
 otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.ecig_eset), design = ecig_design, plot = FALSE)
@@ -1510,7 +1510,7 @@ NYC_HANES.cigars <- NYC_HANES.alt %>% subset_samples(., smokingstatus %in% c("Ne
 
 cigars_eset <- alt_full_eset[,(alt_full_eset$smokingstatus %in% c("Never") | tidyr::replace_na(alt_full_eset$CIGARS_CIGARILLOS == 1, FALSE))]
 
-de.cigars_eset <- EnrichmentBrowser::deAna(cigars_eset, de.method = 'edgeR')
+de.cigars_eset <- EnrichmentBrowser::deAna(cigars_eset, de.method = 'edgeR', filter.by.expr = FALSE)
 
 cigars_design <- model.matrix(~smokingstatus, data = data.frame(pData(cigars_eset)))
 otu_table.voom <- limma::voom(SummarizedExperiment::assay(de.cigars_eset), design = cigars_design, plot = FALSE)
