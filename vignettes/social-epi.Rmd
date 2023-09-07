@@ -33,20 +33,20 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(magrittr)
   library(ggplot2)
-  #library(nychanesmicrobiome)
-  devtools::load_all()
+  library(nychanesmicrobiome)
+  #devtools::load_all()
 })
 ```
 
 
 ```{r load_data}
 #full NYC-HANES2 dataset 
-nychanes_sas <- sas7bdat::read.sas7bdat("http://nychanes.org/wp-content/uploads/sites/6/2015/11/NYCHANES_2013_14_V2_09212016.sas7bdat")
+nychanes_sas <- sas7bdat::read.sas7bdat("https://med.nyu.edu/departments-institutes/population-health/divisions-sections-centers/epidemiology/sites/default/files/nyc-hanes-datasets-and-resources-analytic-data-sets-sas-file.sas7bdat")
 nychanes_full <- annotateFullDataset(nychanes_sas)
 
 #pilot microbiome data
 suppressPackageStartupMessages({
-  NYC_HANES_raw <- loadQiimeData(nychanes_sas)
+  NYC_HANES_raw <- loadQiimeData()
   NYC_HANES <- annotateFactors(NYC_HANES_raw)
 })
 metadata <- data.frame(sample_data(NYC_HANES))
@@ -668,7 +668,7 @@ sessionInfo()
 ```
 
 ```{r check_n_otus_smoking}
-alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
+alt_smokers_cigarettes <- sample_data(NYC_HANES) %>% data.frame() %>% dplyr::filter(smokingstatus == 'Alternative smoker') %>% dplyr::filter(CIGARETTES == 'Yes') %>% dplyr::select(Burklab_ID) %>% t
 NYC_HANES <- prune_samples(!(sample_names(NYC_HANES) %in% alt_smokers_cigarettes), NYC_HANES)
 sample_data(NYC_HANES)$smokingstatus <- relevel(sample_data(NYC_HANES)$smokingstatus,"Never smoker")
 

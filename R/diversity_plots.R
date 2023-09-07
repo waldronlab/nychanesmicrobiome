@@ -32,7 +32,7 @@ plot_alpha_by <- function(pseq, vars, metadata=sample_data(pseq)[,vars], notch=T
   df_alpha$id <- seq_len(nrow(df_alpha))
   
   
-  melt_alpha <- na.omit(melt(df_alpha, measure.vars = measure.vars, id.vars="id"))
+  melt_alpha <- na.omit(reshape2::melt(df_alpha, measure.vars = measure.vars, id.vars="id"))
   melt_alpha %<>% left_join(dplyr::select(df_alpha, id, Chao1), by="id")
   #sort levels of each variable in melted form
   melt_alpha$value <- factor(melt_alpha$value, 
