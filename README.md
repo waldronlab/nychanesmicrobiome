@@ -1,3 +1,12 @@
+# Citations
+
+This repo provides code to reproduce results from two published studies:
+
+Beghini, F. _et al._ [Tobacco exposure associated with oral microbiota oxygen utilization in the New York City Health and Nutrition Examination Study.](https://pubmed.ncbi.nlm.nih.gov/31076212/) Ann. Epidemiol. 34, 18–25.e3 (2019)
+
+Renson, A. et al. [Sociodemographic variation in the oral microbiome.](https://pubmed.ncbi.nlm.nih.gov/31151886/) Ann. Epidemiol. 35, 73–80.e2 (2019)
+
+
 # Microbiome analysis of the NYC-HANES study
 
 To reproduce this analysis, you need two packages from CRAN (www.cran.r-project.org). To install these from the R command line:
